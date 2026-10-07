@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Activity, Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
+import { Activity, Lock, Mail, AlertCircle, ArrowRight, User, Stethoscope } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 
 const LoginPage = () => {
@@ -37,8 +37,12 @@ const LoginPage = () => {
 
     try {
       setIsSubmitting(true);
-      await login(email, password);
-      navigate('/');
+      const user = await login(email, password);
+      if (user.role === 'doctor') {
+        navigate('/doctor');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setServerError(err.message);
     } finally {
@@ -46,18 +50,35 @@ const LoginPage = () => {
     }
   };
 
-  const handleDemoLogin = async () => {
-    setEmail('demo@lablens.com');
+  const handleDemoPatientLogin = async () => {
+    setEmail('john@example.com');
     setPassword('Password123!');
     setServerError('');
     setFieldErrors({});
 
     try {
       setIsSubmitting(true);
-      await login('demo@lablens.com', 'Password123!');
-      navigate('/');
+      await login('john@example.com', 'Password123!');
+      navigate('/dashboard');
     } catch (err) {
-      setServerError(err.message || 'Demo login failed. Please ensure database is seeded.');
+      setServerError(err.message || 'Patient demo login failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDemoDoctorLogin = async () => {
+    setEmail('dr.jenkins@lablens.com');
+    setPassword('Password123!');
+    setServerError('');
+    setFieldErrors({});
+
+    try {
+      setIsSubmitting(true);
+      await login('dr.jenkins@lablens.com', 'Password123!');
+      navigate('/doctor');
+    } catch (err) {
+      setServerError(err.message || 'Doctor demo login failed.');
     } finally {
       setIsSubmitting(false);
     }
@@ -72,10 +93,10 @@ const LoginPage = () => {
             <span>LabLens</span>
           </div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>
-            Patient & Health Portal Login
+            Patient & Doctor Portal Sign In
           </h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Access your secure personal blood report history
+            Access clinical biomarker history and report analysis
           </p>
         </div>
 
@@ -89,16 +110,14 @@ const LoginPage = () => {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email Address</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="email"
-                type="email"
-                className="form-input"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
+            <input
+              id="email"
+              type="email"
+              className="form-input"
+              placeholder="name@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
             {fieldErrors.email && <p className="form-error">{fieldErrors.email}</p>}
           </div>
 
@@ -127,15 +146,32 @@ const LoginPage = () => {
         </form>
 
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ width: '100%', marginBottom: '16px', backgroundColor: '#F8FAFC' }}
-            onClick={handleDemoLogin}
-            disabled={isSubmitting}
-          >
-            Instant Demo Account Sign In
-          </button>
+          <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>
+            Instant Demo Account Access:
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleDemoPatientLogin}
+              disabled={isSubmitting}
+              style={{ justifyContent: 'center', backgroundColor: '#F8FAFC' }}
+            >
+              <User size={14} />
+              <span>Demo Patient</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleDemoDoctorLogin}
+              disabled={isSubmitting}
+              style={{ justifyContent: 'center', backgroundColor: '#F8FAFC' }}
+            >
+              <Stethoscope size={14} />
+              <span>Demo Doctor</span>
+            </button>
+          </div>
 
           <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
             Don't have an account?{' '}

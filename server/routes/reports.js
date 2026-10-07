@@ -1,21 +1,25 @@
 const express = require('express');
 const router = express.Router();
+const { protect, requireRole } = require('../middleware/authMiddleware');
 const {
   getReports,
   getReportById,
+  getReportAnalysis,
+  getParameterReferences,
   createReport,
   deleteReport,
   getTrendsData
 } = require('../controllers/reportController');
-const { protect } = require('../middleware/authMiddleware');
 
-// All report routes protected with JWT auth middleware
 router.use(protect);
 
 router.get('/', getReports);
-router.post('/', createReport);
+router.get('/references/all', getParameterReferences);
 router.get('/trends/all', getTrendsData);
 router.get('/:id', getReportById);
-router.delete('/:id', deleteReport);
+router.get('/:id/analysis', getReportAnalysis);
+
+router.post('/', requireRole('patient'), createReport);
+router.delete('/:id', requireRole('patient'), deleteReport);
 
 module.exports = router;

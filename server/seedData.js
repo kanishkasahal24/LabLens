@@ -1,9 +1,3 @@
-const mongoose = require('mongoose');
-const dotenv = require('dotenv');
-
-dotenv.config();
-
-const connectDB = require('./config/db');
 const User = require('./models/User');
 const DoctorProfile = require('./models/DoctorProfile');
 const PatientProfile = require('./models/PatientProfile');
@@ -13,21 +7,14 @@ const { getParameterStatus, getSeverity } = require('./utils/parameterStatus');
 const { calculateHealthScore } = require('./utils/analysisEngine');
 const { seedParameterReferences } = require('./seedReferences');
 
-const seedData = async () => {
+const seedInitialData = async () => {
   try {
-    await connectDB();
+    const userCount = await User.countDocuments();
+    if (userCount > 0) return; // Already seeded!
 
-    console.log('Clearing existing database collections...');
-    await User.deleteMany({});
-    await DoctorProfile.deleteMany({});
-    await PatientProfile.deleteMany({});
-    await Link.deleteMany({});
-    await Report.deleteMany({});
-
-    // Seed Parameter References
+    console.log('Auto-seeding demo database accounts and clinical data...');
     await seedParameterReferences();
 
-    console.log('Creating demo doctor...');
     const doctorUser = await User.create({
       name: 'Dr. Sarah Jenkins',
       email: 'dr.jenkins@lablens.com',
@@ -44,9 +31,6 @@ const seedData = async () => {
       clinic: 'Metropolis Health Center'
     });
 
-    console.log(`Doctor created: ${doctorUser.email} / Password123! (Code: ${doctorUser.doctorCode})`);
-
-    console.log('Creating demo patient 1 (John Doe)...');
     const patient1User = await User.create({
       name: 'John Doe',
       email: 'john@example.com',
@@ -76,7 +60,6 @@ const seedData = async () => {
       allergies: 'Penicillin'
     });
 
-    console.log('Creating demo patient 2 (Jane Smith)...');
     const patient2User = await User.create({
       name: 'Jane Smith',
       email: 'jane@example.com',
@@ -106,7 +89,6 @@ const seedData = async () => {
       allergies: 'None'
     });
 
-    console.log('Linking patients to doctor...');
     await Link.create({
       doctor: doctorUser._id,
       patient: patient1User._id,
@@ -119,7 +101,6 @@ const seedData = async () => {
       status: 'active'
     });
 
-    // Helper to evaluate parameters
     const buildParameters = (params) => {
       return params.map((p) => {
         const resultType = p.resultType || 'numeric';
@@ -135,7 +116,6 @@ const seedData = async () => {
       });
     };
 
-    console.log('Seeding reports for John Doe...');
     const patient1Reports = [
       {
         labName: 'Quest Diagnostics Labs',
@@ -182,7 +162,6 @@ const seedData = async () => {
       });
     }
 
-    console.log('Seeding reports for Jane Smith...');
     const patient2Reports = [
       {
         labName: 'Apex Health Pathology Lab',
@@ -214,12 +193,10 @@ const seedData = async () => {
       });
     }
 
-    console.log('Database seeded successfully!');
-    process.exit(0);
-  } catch (error) {
-    console.error('Error seeding database:', error);
-    process.exit(1);
+    console.log('Database auto-seeded successfully!');
+  } catch (err) {
+    console.error('Error auto-seeding data:', err);
   }
 };
 
-seedData();
+module.exports = { seedInitialData };

@@ -1,19 +1,31 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Activity, AlertCircle, UserPlus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Activity, AlertCircle, UserPlus, Stethoscope, User } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 
 const RegisterPage = () => {
+  const [searchParams] = useSearchParams();
+  const initialRole = searchParams.get('role') === 'doctor' ? 'doctor' : 'patient';
+
+  const [role, setRole] = useState(initialRole);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
 
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const r = searchParams.get('role');
+    if (r === 'doctor' || r === 'patient') {
+      setRole(r);
+    }
+  }, [searchParams]);
 
   const validate = () => {
     const errors = {};
@@ -25,6 +37,10 @@ const RegisterPage = () => {
       errors.email = 'Email address is required';
     } else if (!/\S+@\S+\.\S+/.test(email)) {
       errors.email = 'Please enter a valid email address';
+    }
+
+    if (role === 'doctor' && !licenseNumber.trim()) {
+      errors.licenseNumber = 'Medical license number is required for doctors';
     }
 
     if (!password) {
@@ -49,8 +65,12 @@ const RegisterPage = () => {
 
     try {
       setIsSubmitting(true);
-      await register(name, email, password);
-      navigate('/');
+      const user = await register(name, email, password, role, licenseNumber);
+      if (user.role === 'doctor') {
+        navigate('/doctor');
+      } else {
+        navigate('/onboarding');
+      }
     } catch (err) {
       setServerError(err.message);
     } finally {
@@ -60,17 +80,17 @@ const RegisterPage = () => {
 
   return (
     <div className="auth-wrapper">
-      <div className="card auth-card">
+      <div className="card auth-card" style={{ maxWidth: '480px' }}>
         <div className="auth-header">
           <div className="auth-brand">
             <Activity size={28} />
             <span>LabLens</span>
           </div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>
-            Create Personal Health Account
+            Create Account
           </h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Start monitoring your blood biomarkers securely
+            Select your account type to get started
           </p>
         </div>
 
@@ -81,6 +101,30 @@ const RegisterPage = () => {
           </div>
         )}
 
+        <div className="form-group" style={{ marginBottom: '20px' }}>
+          <label className="form-label">I am registering as a:</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <button
+              type="button"
+              className={`btn ${role === 'patient' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setRole('patient')}
+              style={{ justifyContent: 'center', padding: '12px' }}
+            >
+              <User size={18} />
+              <span>Patient</span>
+            </button>
+            <button
+              type="button"
+              className={`btn ${role === 'doctor' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setRole('doctor')}
+              style={{ justifyContent: 'center', padding: '12px' }}
+            >
+              <Stethoscope size={18} />
+              <span>Doctor</span>
+            </button>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label" htmlFor="name">Full Name</label>
@@ -88,7 +132,7 @@ const RegisterPage = () => {
               id="name"
               type="text"
               className="form-input"
-              placeholder="Dr. Sarah Jenkins"
+              placeholder={role === 'doctor' ? 'Dr. Sarah Jenkins' : 'John Doe'}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -107,6 +151,21 @@ const RegisterPage = () => {
             />
             {fieldErrors.email && <p className="form-error">{fieldErrors.email}</p>}
           </div>
+
+          {role === 'doctor' && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="licenseNumber">Medical License Number</label>
+              <input
+                id="licenseNumber"
+                type="text"
+                className="form-input"
+                placeholder="e.g. MD-98765"
+                value={licenseNumber}
+                onChange={(e) => setLicenseNumber(e.target.value)}
+              />
+              {fieldErrors.licenseNumber && <p className="form-error">{fieldErrors.licenseNumber}</p>}
+            </div>
+          )}
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">Password</label>
@@ -140,7 +199,7 @@ const RegisterPage = () => {
             style={{ width: '100%', marginTop: '8px' }}
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Creating Account...' : 'Register Account'}
+            {isSubmitting ? 'Creating Account...' : `Register as ${role === 'doctor' ? 'Doctor' : 'Patient'}`}
             <UserPlus size={18} />
           </button>
         </form>

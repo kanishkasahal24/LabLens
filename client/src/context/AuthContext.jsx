@@ -54,11 +54,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Register handler
-  const register = async (name, email, password) => {
+  // Register handler with role and licenseNumber support
+  const register = async (name, email, password, role = 'patient', licenseNumber = '') => {
     setError(null);
     try {
-      const res = await api.post('/auth/register', { name, email, password });
+      const res = await api.post('/auth/register', { name, email, password, role, licenseNumber });
       const { token: newToken, user: userData } = res.data;
       localStorage.setItem('lablens_token', newToken);
       setToken(newToken);
@@ -79,6 +79,10 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   };
 
+  const updateUserProfileState = (updatedUser) => {
+    setUser((prev) => ({ ...prev, ...updatedUser }));
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -89,6 +93,7 @@ export const AuthProvider = ({ children }) => {
         login,
         register,
         logout,
+        updateUserProfileState,
         isAuthenticated: !!user
       }}
     >

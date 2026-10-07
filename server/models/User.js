@@ -19,6 +19,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please provide a password'],
       minlength: 6
+    },
+    role: {
+      type: String,
+      enum: ['patient', 'doctor'],
+      default: 'patient'
+    },
+    profileCompleted: {
+      type: Boolean,
+      default: false
+    },
+    doctorCode: {
+      type: String,
+      unique: true,
+      sparse: true
     }
   },
   {

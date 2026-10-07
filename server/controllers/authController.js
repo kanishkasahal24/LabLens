@@ -1,10 +1,23 @@
+const crypto = require('crypto');
 const User = require('../models/User');
+const DoctorProfile = require('../models/DoctorProfile');
 const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = require('../middleware/authMiddleware');
 
+const generateDoctorCode = () => {
+  return 'DOC-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+};
+
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user._id, email: user.email, name: user.name },
+    {
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      profileCompleted: user.profileCompleted,
+      doctorCode: user.doctorCode || null
+    },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -12,15 +25,19 @@ const generateToken = (user) => {
 
 /**
  * @route   POST /api/auth/register
- * @desc    Register a new user
+ * @desc    Register a new user (patient or doctor)
  * @access  Public
  */
 const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role = 'patient', licenseNumber } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Please provide name, email, and password' });
+    }
+
+    if (role === 'doctor' && !licenseNumber) {
+      return res.status(400).json({ message: 'Medical license number is required for doctor registration' });
     }
 
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -28,11 +45,35 @@ const register = async (req, res, next) => {
       return res.status(400).json({ message: 'An account with this email already exists' });
     }
 
+    let doctorCode = undefined;
+    if (role === 'doctor') {
+      let isUnique = false;
+      while (!isUnique) {
+        doctorCode = generateDoctorCode();
+        const existingCode = await User.findOne({ doctorCode });
+        if (!existingCode) isUnique = true;
+      }
+    }
+
+    // Doctors start with profileCompleted = true once license is provided, or false if onboarding is required.
+    // For doctors, license is saved. Let's set profileCompleted = true for doctors when licenseNumber is provided.
     const user = await User.create({
       name,
       email: email.toLowerCase(),
-      password
+      password,
+      role,
+      profileCompleted: role === 'doctor' ? true : false,
+      doctorCode
     });
+
+    if (role === 'doctor') {
+      await DoctorProfile.create({
+        user: user._id,
+        licenseNumber,
+        specialisation: 'General Medicine',
+        clinic: ''
+      });
+    }
 
     const token = generateToken(user);
 
@@ -41,7 +82,10 @@ const register = async (req, res, next) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        role: user.role,
+        profileCompleted: user.profileCompleted,
+        doctorCode: user.doctorCode || null
       }
     });
   } catch (error) {
@@ -79,7 +123,10 @@ const login = async (req, res, next) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        role: user.role,
+        profileCompleted: user.profileCompleted,
+        doctorCode: user.doctorCode || null
       }
     });
   } catch (error) {
@@ -103,6 +150,9 @@ const getMe = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
+        profileCompleted: user.profileCompleted,
+        doctorCode: user.doctorCode || null,
         createdAt: user.createdAt
       }
     });

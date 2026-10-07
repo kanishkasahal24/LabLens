@@ -7,9 +7,24 @@ const parameterSchema = new mongoose.Schema(
       required: [true, 'Parameter name is required'],
       trim: true
     },
+    panel: {
+      type: String,
+      trim: true,
+      default: 'General'
+    },
+    resultType: {
+      type: String,
+      enum: ['numeric', 'text'],
+      default: 'numeric'
+    },
     value: {
       type: Number,
-      required: [true, 'Parameter numerical value is required']
+      default: null
+    },
+    textValue: {
+      type: String,
+      trim: true,
+      default: ''
     },
     unit: {
       type: String,
@@ -24,10 +39,20 @@ const parameterSchema = new mongoose.Schema(
       type: Number,
       default: null
     },
+    referenceText: {
+      type: String,
+      trim: true,
+      default: ''
+    },
     status: {
       type: String,
-      enum: ['normal', 'low', 'high'],
+      enum: ['normal', 'low', 'high', 'abnormal'],
       default: 'normal'
+    },
+    severity: {
+      type: String,
+      enum: ['none', 'mild', 'moderate', 'marked'],
+      default: 'none'
     }
   },
   { _id: true }
@@ -49,6 +74,21 @@ const reportSchema = new mongoose.Schema(
       type: Date,
       required: [true, 'Test date is required'],
       default: Date.now
+    },
+    collectionDate: {
+      type: Date,
+      default: Date.now
+    },
+    sampleType: {
+      type: String,
+      trim: true,
+      default: 'Venous Blood'
+    },
+    healthScore: {
+      type: Number,
+      default: 100,
+      min: 0,
+      max: 100
     },
     notes: {
       type: String,

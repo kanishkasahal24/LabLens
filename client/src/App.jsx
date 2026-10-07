@@ -6,11 +6,17 @@ import ProtectedRoute from './components/ProtectedRoute';
 
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import OnboardingPage from './pages/OnboardingPage';
 import DashboardPage from './pages/DashboardPage';
 import AddReportPage from './pages/AddReportPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import TrendsPage from './pages/TrendsPage';
 import ProfilePage from './pages/ProfilePage';
+
+// Doctor Pages
+import DoctorDashboardPage from './pages/DoctorDashboardPage';
+import DoctorRequestsPage from './pages/DoctorRequestsPage';
+import DoctorPatientDetailPage from './pages/DoctorPatientDetailPage';
 
 function App() {
   return (
@@ -24,11 +30,31 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
 
+              {/* Onboarding Route (both Patient and Doctor) */}
+              <Route
+                path="/onboarding"
+                element={
+                  <ProtectedRoute>
+                    <OnboardingPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Shared Profile Route */}
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+
               {/* Protected Patient Routes */}
               <Route
                 path="/"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={['patient']}>
                     <DashboardPage />
                   </ProtectedRoute>
                 }
@@ -36,11 +62,21 @@ function App() {
               <Route
                 path="/add-report"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute roles={['patient']}>
                     <AddReportPage />
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/trends"
+                element={
+                  <ProtectedRoute roles={['patient']}>
+                    <TrendsPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Report Detail View (Accessible by Patient owner OR Doctor with active link) */}
               <Route
                 path="/reports/:id"
                 element={
@@ -49,19 +85,29 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* Protected Doctor Routes */}
               <Route
-                path="/trends"
+                path="/doctor"
                 element={
-                  <ProtectedRoute>
-                    <TrendsPage />
+                  <ProtectedRoute roles={['doctor']}>
+                    <DoctorDashboardPage />
                   </ProtectedRoute>
                 }
               />
               <Route
-                path="/profile"
+                path="/doctor/requests"
                 element={
-                  <ProtectedRoute>
-                    <ProfilePage />
+                  <ProtectedRoute roles={['doctor']}>
+                    <DoctorRequestsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/doctor/patients/:id"
+                element={
+                  <ProtectedRoute roles={['doctor']}>
+                    <DoctorPatientDetailPage />
                   </ProtectedRoute>
                 }
               />

@@ -1,17 +1,18 @@
-import React, { useReducer, useState } from 'react';
+import React, { useReducer, useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { PlusCircle, Trash2, Save, ArrowLeft, AlertCircle, Sparkles, FileSpreadsheet } from 'lucide-react';
 import api from '../api/axios';
 
-// Coursework Requirement: useReducer for dynamic parameter list management
 const initialState = {
   labName: '',
   testDate: new Date().toISOString().split('T')[0],
+  collectionDate: new Date().toISOString().split('T')[0],
+  sampleType: 'Venous Blood',
   notes: '',
   parameters: [
-    { name: 'Hemoglobin', value: '', unit: 'g/dL', normalRangeLow: '12.0', normalRangeHigh: '15.5' },
-    { name: 'Fasting Blood Sugar', value: '', unit: 'mg/dL', normalRangeLow: '70', normalRangeHigh: '99' },
-    { name: 'Total Cholesterol', value: '', unit: 'mg/dL', normalRangeLow: '125', normalRangeHigh: '200' }
+    { name: 'Hemoglobin', panel: 'CBC with Differential', resultType: 'numeric', value: '', textValue: '', unit: 'g/dL', normalRangeLow: '13.5', normalRangeHigh: '17.5', referenceText: '' },
+    { name: 'Fasting Blood Sugar', panel: 'Glucose & HbA1c', resultType: 'numeric', value: '', textValue: '', unit: 'mg/dL', normalRangeLow: '70', normalRangeHigh: '99', referenceText: '' },
+    { name: 'Total Cholesterol', panel: 'Lipid Profile', resultType: 'numeric', value: '', textValue: '', unit: 'mg/dL', normalRangeLow: '125', normalRangeHigh: '200', referenceText: '' }
   ]
 };
 
@@ -25,12 +26,12 @@ function formReducer(state, action) {
         ...state,
         parameters: [
           ...state.parameters,
-          { name: '', value: '', unit: '', normalRangeLow: '', normalRangeHigh: '' }
+          { name: '', panel: 'General', resultType: 'numeric', value: '', textValue: '', unit: '', normalRangeLow: '', normalRangeHigh: '', referenceText: '' }
         ]
       };
 
     case 'REMOVE_PARAM':
-      if (state.parameters.length <= 1) return state; // Keep at least one row
+      if (state.parameters.length <= 1) return state;
       return {
         ...state,
         parameters: state.parameters.filter((_, idx) => idx !== action.index)
@@ -50,39 +51,80 @@ function formReducer(state, action) {
         parameters: action.parameters
       };
 
-    case 'RESET':
-      return initialState;
-
     default:
       return state;
   }
 }
 
-// Preset clinical test panels for quick student testing
-const CLINICAL_TEMPLATES = {
-  CBC: [
-    { name: 'Hemoglobin', value: '14.2', unit: 'g/dL', normalRangeLow: '12.0', normalRangeHigh: '15.5' },
-    { name: 'WBC Count', value: '6.5', unit: 'x10^3/µL', normalRangeLow: '4.5', normalRangeHigh: '11.0' },
-    { name: 'Platelet Count', value: '250', unit: 'x10^3/µL', normalRangeLow: '150', normalRangeHigh: '450' }
-  ],
-  LIPID: [
-    { name: 'Total Cholesterol', value: '185', unit: 'mg/dL', normalRangeLow: '125', normalRangeHigh: '200' },
-    { name: 'Triglycerides', value: '130', unit: 'mg/dL', normalRangeLow: '40', normalRangeHigh: '150' }
-  ],
-  METABOLIC: [
-    { name: 'Fasting Blood Sugar', value: '95', unit: 'mg/dL', normalRangeLow: '70', normalRangeHigh: '99' },
-    { name: 'Creatinine', value: '0.9', unit: 'mg/dL', normalRangeLow: '0.6', normalRangeHigh: '1.2' },
-    { name: 'Serum Calcium', value: '9.4', unit: 'mg/dL', normalRangeLow: '8.5', normalRangeHigh: '10.2' }
-  ]
-};
-
 const AddReportPage = () => {
   const [state, dispatch] = useReducer(formReducer, initialState);
+  const [references, setReferences] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchReferences = async () => {
+      try {
+        const res = await api.get('/reports/references/all');
+        setReferences(res.data || []);
+      } catch (err) {
+        console.error('Failed to load canonical reference list:', err);
+      }
+    };
+    fetchReferences();
+  }, []);
+
+  const loadPanelTemplate = (panelName) => {
+    const panelRefs = references.filter((r) => r.panel.toLowerCase() === panelName.toLowerCase());
+    if (panelRefs.length > 0) {
+      const templateParams = panelRefs.map((r) => ({
+        name: r.canonicalName,
+        panel: r.panel,
+        resultType: r.resultType || 'numeric',
+        value: '',
+        textValue: '',
+        unit: r.unit || '',
+        normalRangeLow: r.range?.low !== null && r.range?.low !== undefined ? String(r.range.low) : '',
+        normalRangeHigh: r.range?.high !== null && r.range?.high !== undefined ? String(r.range.high) : '',
+        referenceText: r.range?.referenceText || ''
+      }));
+      dispatch({ type: 'LOAD_TEMPLATE', parameters: templateParams });
+    }
+  };
+
+  const handleNameBlur = (index, nameValue) => {
+    if (!nameValue) return;
+    const match = references.find(
+      (r) =>
+        r.canonicalName.toLowerCase() === nameValue.toLowerCase() ||
+        (Array.isArray(r.aliases) && r.aliases.some((a) => a.toLowerCase() === nameValue.toLowerCase()))
+    );
+
+    if (match) {
+      const currentParam = state.parameters[index];
+      dispatch({
+        type: 'UPDATE_PARAM',
+        index,
+        field: 'panel',
+        value: match.panel || currentParam.panel
+      });
+      if (!currentParam.unit && match.unit) {
+        dispatch({ type: 'UPDATE_PARAM', index, field: 'unit', value: match.unit });
+      }
+      if (!currentParam.normalRangeLow && match.range?.low !== null && match.range?.low !== undefined) {
+        dispatch({ type: 'UPDATE_PARAM', index, field: 'normalRangeLow', value: String(match.range.low) });
+      }
+      if (!currentParam.normalRangeHigh && match.range?.high !== null && match.range?.high !== undefined) {
+        dispatch({ type: 'UPDATE_PARAM', index, field: 'normalRangeHigh', value: String(match.range.high) });
+      }
+      if (match.resultType) {
+        dispatch({ type: 'UPDATE_PARAM', index, field: 'resultType', value: match.resultType });
+      }
+    }
+  };
 
   const validateForm = () => {
     const errors = {};
@@ -101,16 +143,14 @@ const AddReportPage = () => {
         err.name = 'Name required';
       }
 
-      if (param.value === '' || isNaN(Number(param.value))) {
-        err.value = 'Numeric value required';
-      }
-
-      if (param.normalRangeLow !== '' && isNaN(Number(param.normalRangeLow))) {
-        err.normalRangeLow = 'Must be number';
-      }
-
-      if (param.normalRangeHigh !== '' && isNaN(Number(param.normalRangeHigh))) {
-        err.normalRangeHigh = 'Must be number';
+      if (param.resultType === 'numeric') {
+        if (param.value === '' || isNaN(Number(param.value))) {
+          err.value = 'Numeric value required';
+        }
+      } else {
+        if (!param.textValue.trim()) {
+          err.textValue = 'Text result required';
+        }
       }
 
       if (Object.keys(err).length > 0) {
@@ -137,13 +177,19 @@ const AddReportPage = () => {
       const payload = {
         labName: state.labName,
         testDate: state.testDate,
+        collectionDate: state.collectionDate || state.testDate,
+        sampleType: state.sampleType,
         notes: state.notes,
         parameters: state.parameters.map((p) => ({
           name: p.name,
-          value: Number(p.value),
+          panel: p.panel || 'General',
+          resultType: p.resultType || 'numeric',
+          value: p.resultType === 'numeric' && p.value !== '' ? Number(p.value) : null,
+          textValue: p.textValue || '',
           unit: p.unit,
           normalRangeLow: p.normalRangeLow !== '' ? Number(p.normalRangeLow) : null,
-          normalRangeHigh: p.normalRangeHigh !== '' ? Number(p.normalRangeHigh) : null
+          normalRangeHigh: p.normalRangeHigh !== '' ? Number(p.normalRangeHigh) : null,
+          referenceText: p.referenceText || ''
         }))
       };
 
@@ -164,8 +210,8 @@ const AddReportPage = () => {
           <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', marginBottom: '8px' }}>
             <ArrowLeft size={16} /> Back to Dashboard
           </Link>
-          <h1 className="page-title">Add Manual Blood Report</h1>
-          <p className="page-subtitle">Enter lab test results manually with numerical reference ranges</p>
+          <h1 className="page-title">Add Blood Test Report</h1>
+          <p className="page-subtitle">Enter biomarker results with panel templates and auto-filled clinical reference ranges</p>
         </div>
       </div>
 
@@ -177,43 +223,30 @@ const AddReportPage = () => {
       )}
 
       <div className="card">
-        {/* Preset Templates Quick Autofill */}
+        {/* Panel Templates */}
         <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: 'var(--primary-teal-light)', borderRadius: 'var(--radius-md)', border: '1px solid #B2DDDD' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary-teal)', fontWeight: 600, fontSize: '0.875rem', marginBottom: '8px' }}>
             <Sparkles size={18} />
-            <span>Quick Sample Templates (Click to Auto-fill Parameter Rows)</span>
+            <span>Smart Panel Templates (Auto-fills reference ranges for your age & sex)</span>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => dispatch({ type: 'LOAD_TEMPLATE', parameters: CLINICAL_TEMPLATES.CBC })}
-            >
-              <FileSpreadsheet size={14} />
-              <span>Complete Blood Count (CBC)</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => dispatch({ type: 'LOAD_TEMPLATE', parameters: CLINICAL_TEMPLATES.LIPID })}
-            >
-              <FileSpreadsheet size={14} />
-              <span>Lipid Panel</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => dispatch({ type: 'LOAD_TEMPLATE', parameters: CLINICAL_TEMPLATES.METABOLIC })}
-            >
-              <FileSpreadsheet size={14} />
-              <span>Metabolic Panel</span>
-            </button>
+            {['Lipid Profile', 'Liver Function', 'Kidney Function', 'CBC with Differential', 'Thyroid Panel', 'Glucose & HbA1c', 'Urine Routine'].map((panel) => (
+              <button
+                key={panel}
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => loadPanelTemplate(panel)}
+              >
+                <FileSpreadsheet size={14} />
+                <span>{panel}</span>
+              </button>
+            ))}
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           {/* General Metadata */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label" htmlFor="labName">Diagnostic Lab Name *</label>
               <input
@@ -238,25 +271,39 @@ const AddReportPage = () => {
               />
               {validationErrors.testDate && <p className="form-error">{validationErrors.testDate}</p>}
             </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" htmlFor="sampleType">Sample Specimen Type</label>
+              <select
+                id="sampleType"
+                className="form-select"
+                value={state.sampleType}
+                onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'sampleType', value: e.target.value })}
+              >
+                <option value="Venous Blood">Venous Blood</option>
+                <option value="Capillary Blood">Capillary Blood</option>
+                <option value="Urine Sample">Urine Sample</option>
+              </select>
+            </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: '28px' }}>
-            <label className="form-label" htmlFor="notes">Clinical Notes or Physician Comments (Optional)</label>
+            <label className="form-label" htmlFor="notes">Clinical Notes / Comments (Optional)</label>
             <input
               id="notes"
               type="text"
               className="form-input"
-              placeholder="e.g. Fasting 12 hrs prior to blood draw, routine annual screening"
+              placeholder="e.g. Fasted 12 hrs prior to blood draw, routine checkup"
               value={state.notes}
               onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'notes', value: e.target.value })}
             />
           </div>
 
-          {/* Dynamic Parameters List Managed by useReducer */}
+          {/* Dynamic Parameters List */}
           <div style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                Test Parameters & Reference Ranges
+                Test Biomarkers & Reference Ranges
               </h3>
               <button
                 type="button"
@@ -264,126 +311,123 @@ const AddReportPage = () => {
                 onClick={() => dispatch({ type: 'ADD_PARAM' })}
               >
                 <PlusCircle size={16} />
-                <span>Add Parameter Row</span>
+                <span>Add Biomarker Row</span>
               </button>
-            </div>
-
-            {/* Header row labels */}
-            <div className="param-row" style={{ background: 'var(--bg-subtle)', fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-              <div>Biomarker Name *</div>
-              <div>Measured Value *</div>
-              <div>Unit</div>
-              <div>Ref Low</div>
-              <div>Ref High</div>
-              <div>Action</div>
             </div>
 
             {state.parameters.map((param, index) => {
               const rowErr = validationErrors.parameters?.[index] || {};
 
               return (
-                <div key={index} className="param-row">
-                  <div>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Hemoglobin"
-                      value={param.name}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'UPDATE_PARAM',
-                          index,
-                          field: 'name',
-                          value: e.target.value
-                        })
-                      }
-                    />
-                    {rowErr.name && <p className="form-error">{rowErr.name}</p>}
-                  </div>
+                <div key={index} style={{ padding: '14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: '12px', backgroundColor: 'var(--bg-subtle)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: '10px', alignItems: 'start' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Biomarker Name</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. Total Cholesterol"
+                        value={param.name}
+                        onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'name', value: e.target.value })}
+                        onBlur={(e) => handleNameBlur(index, e.target.value)}
+                      />
+                      {rowErr.name && <p className="form-error">{rowErr.name}</p>}
+                    </div>
 
-                  <div>
-                    <input
-                      type="number"
-                      step="any"
-                      className="form-input number-cell"
-                      placeholder="e.g. 13.5"
-                      value={param.value}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'UPDATE_PARAM',
-                          index,
-                          field: 'value',
-                          value: e.target.value
-                        })
-                      }
-                    />
-                    {rowErr.value && <p className="form-error">{rowErr.value}</p>}
-                  </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Type</label>
+                      <select
+                        className="form-select"
+                        value={param.resultType || 'numeric'}
+                        onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'resultType', value: e.target.value })}
+                      >
+                        <option value="numeric">Numeric</option>
+                        <option value="text">Text Result</option>
+                      </select>
+                    </div>
 
-                  <div>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. g/dL"
-                      value={param.unit}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'UPDATE_PARAM',
-                          index,
-                          field: 'unit',
-                          value: e.target.value
-                        })
-                      }
-                    />
-                  </div>
+                    {param.resultType === 'numeric' ? (
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Value</label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input number-cell"
+                          placeholder="e.g. 185"
+                          value={param.value}
+                          onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'value', value: e.target.value })}
+                        />
+                        {rowErr.value && <p className="form-error">{rowErr.value}</p>}
+                      </div>
+                    ) : (
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Text Result</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="e.g. Negative, Trace"
+                          value={param.textValue}
+                          onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'textValue', value: e.target.value })}
+                        />
+                        {rowErr.textValue && <p className="form-error">{rowErr.textValue}</p>}
+                      </div>
+                    )}
 
-                  <div>
-                    <input
-                      type="number"
-                      step="any"
-                      className="form-input number-cell"
-                      placeholder="12.0"
-                      value={param.normalRangeLow}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'UPDATE_PARAM',
-                          index,
-                          field: 'normalRangeLow',
-                          value: e.target.value
-                        })
-                      }
-                    />
-                  </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Unit</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. mg/dL"
+                        value={param.unit}
+                        onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'unit', value: e.target.value })}
+                      />
+                    </div>
 
-                  <div>
-                    <input
-                      type="number"
-                      step="any"
-                      className="form-input number-cell"
-                      placeholder="15.5"
-                      value={param.normalRangeHigh}
-                      onChange={(e) =>
-                        dispatch({
-                          type: 'UPDATE_PARAM',
-                          index,
-                          field: 'normalRangeHigh',
-                          value: e.target.value
-                        })
-                      }
-                    />
-                  </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Ref Range / Text</label>
+                      {param.resultType === 'numeric' ? (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <input
+                            type="number"
+                            step="any"
+                            className="form-input number-cell"
+                            placeholder="Low"
+                            value={param.normalRangeLow}
+                            onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'normalRangeLow', value: e.target.value })}
+                          />
+                          <input
+                            type="number"
+                            step="any"
+                            className="form-input number-cell"
+                            placeholder="High"
+                            value={param.normalRangeHigh}
+                            onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'normalRangeHigh', value: e.target.value })}
+                          />
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="Ref text (Negative)"
+                          value={param.referenceText}
+                          onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'referenceText', value: e.target.value })}
+                        />
+                      )}
+                    </div>
 
-                  <div>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      style={{ padding: '10px' }}
-                      onClick={() => dispatch({ type: 'REMOVE_PARAM', index })}
-                      disabled={state.parameters.length <= 1}
-                      title="Delete row"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div style={{ paddingTop: '20px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        style={{ padding: '10px' }}
+                        onClick={() => dispatch({ type: 'REMOVE_PARAM', index })}
+                        disabled={state.parameters.length <= 1}
+                        title="Delete row"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -396,7 +440,7 @@ const AddReportPage = () => {
             </Link>
             <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              <span>{isSubmitting ? 'Saving Lab Report...' : 'Save Blood Report'}</span>
+              <span>{isSubmitting ? 'Saving Analysis Report...' : 'Save Blood Report'}</span>
             </button>
           </div>
         </form>
