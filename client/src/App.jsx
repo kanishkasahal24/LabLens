@@ -13,6 +13,7 @@ import AddReportPage from './pages/AddReportPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import TrendsPage from './pages/TrendsPage';
 import ComparePage from './pages/ComparePage';
+import BiomarkerGuidePage from './pages/BiomarkerGuidePage';
 import ProfilePage from './pages/ProfilePage';
 import HealthAdvisoryPage from './pages/HealthAdvisoryPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -93,6 +94,14 @@ function App() {
                 element={
                   <ProtectedRoute roles={['patient']}>
                     <HealthAdvisoryPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/guide"
+                element={
+                  <ProtectedRoute>
+                    <BiomarkerGuidePage />
                   </ProtectedRoute>
                 }
               />

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Activity, LayoutDashboard, PlusCircle, TrendingUp, GitCompare, User, LogOut, Users, UserCheck, Sparkles, LogIn, UserPlus } from 'lucide-react';
+import { Activity, LayoutDashboard, PlusCircle, TrendingUp, GitCompare, User, LogOut, Users, UserCheck, Sparkles, LogIn, UserPlus, BookOpen } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 
 const Navbar = () => {
@@ -89,6 +89,11 @@ const Navbar = () => {
                 <span>Advisory</span>
               </NavLink>
 
+              <NavLink to="/guide" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                <BookOpen size={18} />
+                <span>Guide</span>
+              </NavLink>
+
               <NavLink to="/profile" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                 <User size={18} />
                 <span>Profile</span>
@@ -104,6 +109,11 @@ const Navbar = () => {
               <NavLink to="/doctor/requests" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                 <UserCheck size={18} />
                 <span>Requests</span>
+              </NavLink>
+
+              <NavLink to="/guide" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                <BookOpen size={18} />
+                <span>Guide</span>
               </NavLink>
 
               <NavLink to="/profile" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
