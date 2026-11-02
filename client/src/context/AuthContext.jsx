@@ -31,9 +31,13 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('lablens_user', JSON.stringify(res.data.user));
       setError(null);
     } catch (err) {
-      console.warn('Auth verification failed:', err.message);
-      // Only clear credentials if server explicitly rejected with 401 Unauthorized
-      if (err.response?.status === 401) {
+      // (c) ONLY network failures (server unreachable) use the cached profile
+      const isNetworkFailure = !err.response || err.code === 'ERR_NETWORK';
+      if (isNetworkFailure) {
+        console.warn('Server unreachable, maintaining cached profile for offline resilience:', err.message);
+      } else {
+        // (b) Server responded with an error (401 invalid/expired token, 403, 404, etc.) -> clear cached profile & logout
+        console.warn('Auth verification rejected by server with status:', err.response?.status);
         localStorage.removeItem('lablens_token');
         localStorage.removeItem('lablens_user');
         setToken(null);

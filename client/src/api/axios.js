@@ -21,4 +21,16 @@ api.interceptors.request.use(
   }
 );
 
+// Response interceptor to handle 401 Unauthorized
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('lablens_token');
+      localStorage.removeItem('lablens_user');
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;

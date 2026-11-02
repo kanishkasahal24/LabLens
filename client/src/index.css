@@ -177,6 +177,156 @@ a:hover {
   font-size: 0.875rem;
 }
 
+/* Mobile Navigation Toggle & Drawer */
+.navbar-mobile-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.navbar-mobile-toggle:hover {
+  background-color: var(--bg-subtle);
+  color: var(--primary-teal);
+}
+
+.navbar-mobile-toggle:focus-visible {
+  outline: 2px solid var(--primary-teal);
+  outline-offset: 2px;
+}
+
+.navbar-mobile-backdrop {
+  position: fixed;
+  top: 68px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 998;
+  animation: fadeIn 0.2s ease;
+}
+
+.navbar-mobile-menu {
+  position: fixed;
+  top: 68px;
+  left: 0;
+  right: 0;
+  max-height: calc(100vh - 68px);
+  overflow-y: auto;
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  padding: 16px 20px 24px 20px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-lg);
+  animation: slideDown 0.25s ease;
+}
+
+.mobile-user-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mobile-nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.mobile-nav-link:hover {
+  background-color: var(--primary-teal-light);
+  color: var(--primary-teal);
+  text-decoration: none;
+}
+
+.mobile-nav-link.active {
+  background-color: var(--primary-teal-light);
+  color: var(--primary-teal);
+  font-weight: 700;
+}
+
+.mobile-logout-section {
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.mobile-logout-btn {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mobile-guest-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mobile-guest-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.mobile-guest-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-guest-btn {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+@media (max-width: 860px) {
+  .desktop-nav {
+    display: none !important;
+  }
+  .navbar-mobile-toggle {
+    display: flex;
+  }
+  .navbar-inner {
+    padding: 0 16px;
+  }
+}
+
 /* Common UI Components */
 .card {
   background-color: var(--bg-card);
@@ -2607,6 +2757,445 @@ a:hover {
   max-width: 480px;
   line-height: 1.45;
 }
+
+/* ==========================================================================
+   Comprehensive Responsiveness & Mobile Polish (Task 6)
+   ========================================================================== */
+
+/* Universal overflow and scaling safeguards */
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.app-container {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.main-content {
+  width: 100%;
+  max-width: 1200px;
+  box-sizing: border-box;
+}
+
+img, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Table Horizontal Scrolling Safeguards */
+.clinical-table-container,
+.table-responsive,
+.preview-table-container,
+.comparison-table-wrapper,
+.sample-preview-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-lg);
+  position: relative;
+}
+
+/* Tablet & Below Breakpoint (max-width: 860px) */
+@media (max-width: 860px) {
+  .main-content {
+    padding: 24px 16px;
+  }
+
+  /* Page Headers */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .page-header > div:last-child {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .page-header .btn {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  /* Stats and Vitals Grids */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .vitals-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  /* Compare Page Selectors */
+  .compare-selectors-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .comparison-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  /* Biomarker Cards Grid */
+  .guide-cards-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+}
+
+/* Mobile Breakpoint (max-width: 640px) */
+@media (max-width: 640px) {
+  .main-content {
+    padding: 16px 12px;
+  }
+
+  /* Form inputs: min 16px to prevent iOS auto-zoom */
+  input,
+  select,
+  textarea,
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .guide-search-input,
+  .doctor-search-input {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+
+  /* Minimum tap targets (>= 44x44px) */
+  .btn,
+  .mobile-nav-link,
+  .guide-category-chip,
+  .filter-pill,
+  .analytics-tab,
+  .tab-btn,
+  .sample-preview-tab,
+  .preview-tab-btn,
+  .mode-tab-btn {
+    min-height: 44px;
+  }
+
+  /* Button full width in stacked contexts */
+  .btn-lg {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Hero Section */
+  .landing-hero {
+    padding: 20px 0 32px 0;
+    gap: 28px;
+  }
+
+  .hero-title {
+    font-size: 1.875rem;
+    line-height: 1.25;
+  }
+
+  .hero-subtitle {
+    font-size: 0.9375rem;
+  }
+
+  .hero-cta-group {
+    flex-direction: column;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .hero-cta-group .btn {
+    width: 100%;
+  }
+
+  .hero-trust-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .hero-visual {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .hero-score-card {
+    width: 100%;
+    max-width: 330px;
+    margin: 0 auto;
+    padding: 20px 16px;
+  }
+
+  .hero-vitals-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hero-vital-chip {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Features & How It Works Grids */
+  .features-grid,
+  .steps-container {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Sample Preview Tabs */
+  .preview-top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .preview-tab-pills {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .preview-tab-btn {
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Dashboard Vitals & Stats */
+  .vitals-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* Report Cards List */
+  .report-list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .report-list-item-meta {
+    width: 100%;
+  }
+
+  .report-list-item-actions {
+    width: 100%;
+    display: flex;
+  }
+
+  .report-list-item-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Add Report Page */
+  .add-report-modes {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mode-tab-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dropzone-zone {
+    padding: 24px 16px;
+  }
+
+  .extraction-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .extraction-table-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .extraction-table-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Compare Page */
+  .comparison-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-filters-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .compare-filter-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .filter-pill {
+    flex: 1;
+    min-width: 70px;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Tables Minimum Width in Scrollable Wrapper */
+  .clinical-table,
+  .comparison-matrix-table {
+    min-width: 520px;
+  }
+
+  /* Biomarker Guide Page */
+  .guide-cards-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .biomarker-card {
+    padding: 16px;
+  }
+
+  .gender-ranges-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .biomarker-indicators-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .guide-search-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .guide-clear-all-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .guide-results-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  /* Profile Forms */
+  .profile-form-grid,
+  .profile-section-grid,
+  .doctor-link-box {
+    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Doctor Portal Cards */
+  .patient-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .patient-card-actions {
+    width: 100%;
+  }
+
+  .patient-card-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .request-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .request-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .request-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Modals */
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-dialog,
+  .modal-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 18px 14px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+}
+
+/* Extra Small Mobile (max-width: 380px) */
+@media (max-width: 380px) {
+  .brand span {
+    font-size: 1.125rem;
+  }
+
+  .main-content {
+    padding: 12px 8px;
+  }
+
+  .card {
+    padding: 16px 12px;
+  }
+
+  .page-title {
+    font-size: 1.45rem;
+  }
+
+  .hero-title {
+    font-size: 1.5rem;
+  }
+
+  .hero-score-card {
+    padding: 16px 10px;
+  }
+
+  .clinical-table th,
+  .clinical-table td {
+    padding: 10px 12px;
+  }
+}
+
 
 
 
