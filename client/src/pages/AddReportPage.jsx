@@ -310,7 +310,7 @@ const AddReportPage = () => {
     <div>
       <div className="page-header">
         <div>
-          <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', marginBottom: '8px' }}>
+          <Link to="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', marginBottom: '8px' }}>
             <ArrowLeft size={16} /> Back to Dashboard
           </Link>
           <h1 className="page-title">Add Blood Test Report</h1>
@@ -653,7 +653,7 @@ const AddReportPage = () => {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '32px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
-            <Link to="/" className="btn btn-secondary">
+            <Link to="/dashboard" className="btn btn-secondary">
               Cancel
             </Link>
             <button type="submit" className="btn btn-primary" disabled={isSubmitting}>

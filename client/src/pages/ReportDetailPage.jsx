@@ -59,7 +59,7 @@ const ReportDetailPage = () => {
     try {
       setDeleting(true);
       await api.delete(`/reports/${id}`);
-      navigate(user?.role === 'doctor' ? '/doctor' : '/');
+      navigate(user?.role === 'doctor' ? '/doctor' : '/dashboard');
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to delete report');
       setDeleting(false);
@@ -81,7 +81,7 @@ const ReportDetailPage = () => {
   if (error || !analysisData) {
     return (
       <div>
-        <Link to="/" className="btn btn-secondary btn-sm" style={{ marginBottom: '16px' }}>
+        <Link to={user?.role === 'doctor' ? '/doctor' : '/dashboard'} className="btn btn-secondary btn-sm" style={{ marginBottom: '16px' }}>
           <ArrowLeft size={16} /> Back
         </Link>
         <div className="error-banner">

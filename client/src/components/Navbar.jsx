@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Activity, LayoutDashboard, PlusCircle, TrendingUp, User, LogOut, Users, UserCheck, Sparkles } from 'lucide-react';
+import { Activity, LayoutDashboard, PlusCircle, TrendingUp, User, LogOut, Users, UserCheck, Sparkles, LogIn, UserPlus } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 
 const Navbar = () => {
@@ -8,13 +8,37 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Keep Navbar hidden for unauthenticated users
-  if (!isAuthenticated) return null;
-
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
+  // Unauthenticated Navbar for landing page and auth flows
+  if (!isAuthenticated) {
+    return (
+      <header className="navbar">
+        <div className="navbar-inner">
+          <Link to="/" className="brand" aria-label="LabLens Home">
+            <div className="brand-icon">
+              <Activity size={22} />
+            </div>
+            <span>LabLens</span>
+          </Link>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Link to="/login" className="btn btn-secondary btn-sm">
+              <LogIn size={15} />
+              <span>Log in</span>
+            </Link>
+            <Link to="/register" className="btn btn-primary btn-sm">
+              <UserPlus size={15} />
+              <span>Get Started</span>
+            </Link>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   const initials = user?.name
     ? user.name
@@ -30,7 +54,7 @@ const Navbar = () => {
   return (
     <header className="navbar">
       <div className="navbar-inner">
-        <Link to={isDoctor ? '/doctor' : '/'} className="brand">
+        <Link to={isDoctor ? '/doctor' : '/dashboard'} className="brand" aria-label="LabLens Dashboard">
           <div className="brand-icon">
             <Activity size={22} />
           </div>
@@ -40,7 +64,7 @@ const Navbar = () => {
         <nav className="nav-links">
           {!isDoctor ? (
             <>
-              <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <NavLink to="/dashboard" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                 <LayoutDashboard size={18} />
                 <span>Dashboard</span>
               </NavLink>
