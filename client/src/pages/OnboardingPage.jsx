@@ -46,7 +46,7 @@ const OnboardingPage = () => {
 
   useEffect(() => {
     if (user?.profileCompleted) {
-      navigate(isDoctor ? '/doctor' : '/');
+      navigate(isDoctor ? '/doctor' : '/dashboard');
     }
   }, [user, isDoctor, navigate]);
 
@@ -115,7 +115,7 @@ const OnboardingPage = () => {
       setLoading(true);
       const res = await api.put('/profile', patientForm);
       updateUserProfileState({ profileCompleted: true });
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save patient profile');
     } finally {

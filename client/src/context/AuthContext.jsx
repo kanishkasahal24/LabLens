@@ -4,7 +4,14 @@ import api from '../api/axios';
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('lablens_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState(() => localStorage.getItem('lablens_token'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,13 +28,21 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       const res = await api.get('/auth/me');
       setUser(res.data.user);
+      localStorage.setItem('lablens_user', JSON.stringify(res.data.user));
       setError(null);
     } catch (err) {
-      console.error('Auth verification failed:', err);
-      // If token invalid, clear it
-      localStorage.removeItem('lablens_token');
-      setToken(null);
-      setUser(null);
+      // (c) ONLY network failures (server unreachable) use the cached profile
+      const isNetworkFailure = !err.response || err.code === 'ERR_NETWORK';
+      if (isNetworkFailure) {
+        console.warn('Server unreachable, maintaining cached profile for offline resilience:', err.message);
+      } else {
+        // (b) Server responded with an error (401 invalid/expired token, 403, 404, etc.) -> clear cached profile & logout
+        console.warn('Auth verification rejected by server with status:', err.response?.status);
+        localStorage.removeItem('lablens_token');
+        localStorage.removeItem('lablens_user');
+        setToken(null);
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -44,6 +59,7 @@ export const AuthProvider = ({ children }) => {
       const res = await api.post('/auth/login', { email, password });
       const { token: newToken, user: userData } = res.data;
       localStorage.setItem('lablens_token', newToken);
+      localStorage.setItem('lablens_user', JSON.stringify(userData));
       setToken(newToken);
       setUser(userData);
       return userData;
@@ -61,6 +77,7 @@ export const AuthProvider = ({ children }) => {
       const res = await api.post('/auth/register', { name, email, password, role, licenseNumber });
       const { token: newToken, user: userData } = res.data;
       localStorage.setItem('lablens_token', newToken);
+      localStorage.setItem('lablens_user', JSON.stringify(userData));
       setToken(newToken);
       setUser(userData);
       return userData;
@@ -74,6 +91,7 @@ export const AuthProvider = ({ children }) => {
   // Logout handler
   const logout = () => {
     localStorage.removeItem('lablens_token');
+    localStorage.removeItem('lablens_user');
     setToken(null);
     setUser(null);
     setError(null);

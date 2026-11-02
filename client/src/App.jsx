@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import OnboardingPage from './pages/OnboardingPage';
@@ -11,8 +12,11 @@ import DashboardPage from './pages/DashboardPage';
 import AddReportPage from './pages/AddReportPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import TrendsPage from './pages/TrendsPage';
+import ComparePage from './pages/ComparePage';
+import BiomarkerGuidePage from './pages/BiomarkerGuidePage';
 import ProfilePage from './pages/ProfilePage';
 import HealthAdvisoryPage from './pages/HealthAdvisoryPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 // Doctor Pages
 import DoctorDashboardPage from './pages/DoctorDashboardPage';
@@ -28,6 +32,7 @@ function App() {
           <main className="main-content">
             <Routes>
               {/* Public Routes */}
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
 
@@ -53,7 +58,7 @@ function App() {
 
               {/* Protected Patient Routes */}
               <Route
-                path="/"
+                path="/dashboard"
                 element={
                   <ProtectedRoute roles={['patient']}>
                     <DashboardPage />
@@ -77,10 +82,26 @@ function App() {
                 }
               />
               <Route
+                path="/compare"
+                element={
+                  <ProtectedRoute roles={['patient']}>
+                    <ComparePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/advisory"
                 element={
                   <ProtectedRoute roles={['patient']}>
                     <HealthAdvisoryPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/guide"
+                element={
+                  <ProtectedRoute>
+                    <BiomarkerGuidePage />
                   </ProtectedRoute>
                 }
               />
@@ -121,8 +142,8 @@ function App() {
                 }
               />
 
-              {/* Fallback Catch-all Route */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {/* Fallback Catch-all 404 Route */}
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </main>
         </div>

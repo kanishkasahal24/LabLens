@@ -1,4 +1,4 @@
-import React, { useReducer, useState, useEffect, useRef } from 'react';
+import React, { useReducer, useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   PlusCircle,
@@ -11,11 +11,16 @@ import {
   UploadCloud,
   FileText,
   CheckCircle2,
-  Loader2
+  Loader2,
+  RefreshCw,
+  HelpCircle
 } from 'lucide-react';
 import api from '../api/axios';
+import PdfDropzone from '../components/PdfDropzone';
+import StatusBadge from '../components/StatusBadge';
+import { getParameterStatus } from '../utils/statusHelper';
 
-const initialState = {
+const initialManualState = {
   labName: '',
   testDate: new Date().toISOString().split('T')[0],
   collectionDate: new Date().toISOString().split('T')[0],
@@ -41,7 +46,7 @@ function formReducer(state, action) {
         ...state,
         parameters: [
           ...state.parameters,
-          { name: '', panel: 'General', resultType: 'numeric', value: '', textValue: '', unit: '', normalRangeLow: '', normalRangeHigh: '', referenceText: '' }
+          { name: '', panel: 'General', resultType: 'numeric', value: '', textValue: '', unit: '', normalRangeLow: '', normalRangeHigh: '', referenceText: '', status: 'normal' }
         ]
       };
 
@@ -52,13 +57,25 @@ function formReducer(state, action) {
         parameters: state.parameters.filter((_, idx) => idx !== action.index)
       };
 
-    case 'UPDATE_PARAM':
+    case 'UPDATE_PARAM': {
       const updatedParams = [...state.parameters];
-      updatedParams[action.index] = {
-        ...updatedParams[action.index],
-        [action.field]: action.value
-      };
+      const target = { ...updatedParams[action.index], [action.field]: action.value };
+      
+      // Auto-recalculate status when value, range or type changes
+      if (['value', 'normalRangeLow', 'normalRangeHigh', 'resultType', 'textValue', 'referenceText'].includes(action.field)) {
+        target.status = getParameterStatus(
+          target.value,
+          target.normalRangeLow,
+          target.normalRangeHigh,
+          target.resultType,
+          target.textValue,
+          target.referenceText
+        );
+      }
+
+      updatedParams[action.index] = target;
       return { ...state, parameters: updatedParams };
+    }
 
     case 'LOAD_TEMPLATE':
       return {
@@ -72,7 +89,8 @@ function formReducer(state, action) {
 }
 
 const AddReportPage = () => {
-  const [state, dispatch] = useReducer(formReducer, initialState);
+  const [activeMode, setActiveMode] = useState('pdf'); // 'pdf' | 'manual'
+  const [state, dispatch] = useReducer(formReducer, initialManualState);
   const [references, setReferences] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,10 +98,9 @@ const AddReportPage = () => {
 
   // PDF Upload & Extraction States
   const [pdfFile, setPdfFile] = useState(null);
-  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
-  const [uploadSuccessMessage, setUploadSuccessMessage] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionResult, setExtractionResult] = useState(null);
+  const [uploadError, setUploadError] = useState('');
 
   const navigate = useNavigate();
 
@@ -99,6 +116,94 @@ const AddReportPage = () => {
     fetchReferences();
   }, []);
 
+  // PDF Upload & Extraction Handler
+  const handlePdfSelected = useCallback(async (selectedFile) => {
+    setPdfFile(selectedFile);
+    setUploadError('');
+    setServerError('');
+    setIsExtracting(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('reportPdf', selectedFile);
+
+      const res = await api.post('/reports/upload-pdf', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      const data = res.data;
+      setExtractionResult(data);
+
+      const metadata = data.metadata || {};
+      const extractedParams = (data.parameters || []).map((p) => {
+        const status = p.status || getParameterStatus(
+          p.value,
+          p.normalRangeLow,
+          p.normalRangeHigh,
+          p.resultType,
+          p.textValue,
+          p.referenceText
+        );
+
+        return {
+          name: p.name || '',
+          panel: p.panel || 'General',
+          resultType: p.resultType || 'numeric',
+          value: p.value !== null && p.value !== undefined ? String(p.value) : '',
+          textValue: p.textValue || '',
+          unit: p.unit || '',
+          normalRangeLow: p.normalRangeLow !== null && p.normalRangeLow !== undefined ? String(p.normalRangeLow) : '',
+          normalRangeHigh: p.normalRangeHigh !== null && p.normalRangeHigh !== undefined ? String(p.normalRangeHigh) : '',
+          referenceText: p.referenceText || '',
+          status,
+          confidence: p.confidence || 'high'
+        };
+      });
+
+      // Synchronize into state
+      dispatch({
+        type: 'SET_ALL_FIELDS',
+        payload: {
+          labName: metadata.labName || 'Diagnostic Laboratory',
+          testDate: metadata.testDate || new Date().toISOString().split('T')[0],
+          collectionDate: metadata.collectionDate || metadata.testDate || new Date().toISOString().split('T')[0],
+          sampleType: metadata.sampleType || 'Venous Blood',
+          notes: `Uploaded from ${selectedFile.name} on ${new Date().toLocaleDateString()}. Extracted ${extractedParams.length} biomarkers.`,
+          parameters: extractedParams.length > 0 ? extractedParams : [
+            { name: '', panel: 'General', resultType: 'numeric', value: '', textValue: '', unit: '', normalRangeLow: '', normalRangeHigh: '', referenceText: '', status: 'normal' }
+          ]
+        }
+      });
+    } catch (err) {
+      console.error('PDF extraction failed:', err);
+      let errMsg = 'Failed to extract biomarkers from this PDF document.';
+      if (err.response?.status === 422) {
+        errMsg = err.response.data?.message || 'No extractable text found in this PDF. It may be a scanned image without OCR text or password-protected.';
+      } else if (err.response?.status === 400) {
+        errMsg = err.response.data?.message || 'Please upload a valid lab report PDF.';
+      } else if (err.response?.data?.message) {
+        errMsg = err.response.data.message;
+      } else if (err.message && !err.response) {
+        errMsg = 'Network error: Unable to reach the server. Please check your connection and retry.';
+      }
+      setUploadError(errMsg);
+      setExtractionResult(null);
+    } finally {
+      setIsExtracting(false);
+    }
+  }, []);
+
+  const handleClearPdf = () => {
+    setPdfFile(null);
+    setExtractionResult(null);
+    setUploadError('');
+    setServerError('');
+    setValidationErrors({});
+    dispatch({ type: 'SET_ALL_FIELDS', payload: initialManualState });
+  };
+
   const loadPanelTemplate = (panelName) => {
     const panelRefs = references.filter((r) => r.panel.toLowerCase() === panelName.toLowerCase());
     if (panelRefs.length > 0) {
@@ -111,7 +216,8 @@ const AddReportPage = () => {
         unit: r.unit || '',
         normalRangeLow: r.range?.low !== null && r.range?.low !== undefined ? String(r.range.low) : '',
         normalRangeHigh: r.range?.high !== null && r.range?.high !== undefined ? String(r.range.high) : '',
-        referenceText: r.range?.referenceText || ''
+        referenceText: r.range?.referenceText || '',
+        status: 'normal'
       }));
       dispatch({ type: 'LOAD_TEMPLATE', parameters: templateParams });
     }
@@ -148,90 +254,9 @@ const AddReportPage = () => {
     }
   };
 
-  // PDF & Image OCR Extraction Handler
-  const handlePdfUpload = async (file) => {
-    if (!file) return;
-
-    const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
-    const fileNameLower = file.name.toLowerCase();
-    const isValid = validExtensions.some((ext) => fileNameLower.endsWith(ext)) ||
-      file.type === 'application/pdf' ||
-      file.type.startsWith('image/');
-
-    if (!isValid) {
-      setServerError('Please select a valid PDF document or report image (.pdf, .png, .jpg, .jpeg, .webp).');
-      return;
-    }
-
-    setServerError('');
-    setUploadSuccessMessage('');
-    setIsUploadingPdf(true);
-    setPdfFile(file);
-
-    try {
-      const formData = new FormData();
-      formData.append('reportPdf', file);
-
-      const res = await api.post('/reports/upload-pdf', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      const { metadata, parameters, message } = res.data;
-
-      // Populate extracted metadata and biomarkers into form state
-      dispatch({
-        type: 'SET_ALL_FIELDS',
-        payload: {
-          labName: metadata.labName || state.labName,
-          testDate: metadata.testDate || state.testDate,
-          collectionDate: metadata.collectionDate || state.collectionDate,
-          sampleType: metadata.sampleType || state.sampleType,
-          notes: `Uploaded from ${metadata.fileName}. Automatically extracted ${parameters.length} biomarkers.`,
-          parameters: parameters.length > 0 ? parameters.map((p) => ({
-            name: p.name,
-            panel: p.panel || 'General',
-            resultType: p.resultType || 'numeric',
-            value: p.value !== null && p.value !== undefined ? String(p.value) : '',
-            textValue: p.textValue || '',
-            unit: p.unit || '',
-            normalRangeLow: p.normalRangeLow !== null && p.normalRangeLow !== undefined ? String(p.normalRangeLow) : '',
-            normalRangeHigh: p.normalRangeHigh !== null && p.normalRangeHigh !== undefined ? String(p.normalRangeHigh) : '',
-            referenceText: p.referenceText || ''
-          })) : state.parameters
-        }
-      });
-
-      setUploadSuccessMessage(message || `Extracted ${parameters.length} biomarkers from PDF. Review and edit values below before saving.`);
-    } catch (err) {
-      console.error('PDF extraction failed:', err);
-      setServerError(err.response?.data?.message || 'Failed to extract biomarkers from this PDF. Please enter values manually.');
-    } finally {
-      setIsUploadingPdf(false);
-    }
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handlePdfUpload(e.dataTransfer.files[0]);
-    }
-  };
-
   const validateForm = () => {
     const errors = {};
-    if (!state.labName.trim()) {
+    if (!state.labName || !state.labName.trim()) {
       errors.labName = 'Laboratory name is required';
     }
 
@@ -239,19 +264,23 @@ const AddReportPage = () => {
       errors.testDate = 'Test date is required';
     }
 
+    if (!state.parameters || state.parameters.length === 0) {
+      errors.general = 'At least one biomarker parameter is required';
+    }
+
     const paramErrors = [];
     state.parameters.forEach((param, idx) => {
       const err = {};
-      if (!param.name.trim()) {
-        err.name = 'Name required';
+      if (!param.name || !param.name.trim()) {
+        err.name = 'Biomarker name is required';
       }
 
       if (param.resultType === 'numeric') {
-        if (param.value === '' || isNaN(Number(param.value))) {
-          err.value = 'Numeric value required';
+        if (param.value === '' || param.value === null || isNaN(Number(param.value))) {
+          err.value = 'Valid number is required';
         }
       } else {
-        if (!param.textValue.trim()) {
+        if (!param.textValue || !param.textValue.trim()) {
           err.textValue = 'Text result required';
         }
       }
@@ -273,34 +302,36 @@ const AddReportPage = () => {
     e.preventDefault();
     setServerError('');
 
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
 
     try {
       setIsSubmitting(true);
       const payload = {
-        labName: state.labName,
+        labName: state.labName.trim(),
         testDate: state.testDate,
         collectionDate: state.collectionDate || state.testDate,
-        sampleType: state.sampleType,
-        notes: state.notes,
+        sampleType: state.sampleType || 'Venous Blood',
+        notes: state.notes ? state.notes.trim() : '',
         parameters: state.parameters.map((p) => ({
-          name: p.name,
-          panel: p.panel || 'General',
+          name: p.name.trim(),
+          panel: p.panel ? p.panel.trim() : 'General',
           resultType: p.resultType || 'numeric',
           value: p.resultType === 'numeric' && p.value !== '' ? Number(p.value) : null,
-          textValue: p.textValue || '',
-          unit: p.unit,
-          normalRangeLow: p.normalRangeLow !== '' ? Number(p.normalRangeLow) : null,
-          normalRangeHigh: p.normalRangeHigh !== '' ? Number(p.normalRangeHigh) : null,
-          referenceText: p.referenceText || ''
+          textValue: p.textValue ? p.textValue.trim() : '',
+          unit: p.unit ? p.unit.trim() : '',
+          normalRangeLow: p.normalRangeLow !== '' && p.normalRangeLow !== null ? Number(p.normalRangeLow) : null,
+          normalRangeHigh: p.normalRangeHigh !== '' && p.normalRangeHigh !== null ? Number(p.normalRangeHigh) : null,
+          referenceText: p.referenceText ? p.referenceText.trim() : ''
         }))
       };
 
       const res = await api.post('/reports', payload);
       navigate(`/reports/${res.data._id}`);
     } catch (err) {
-      console.error('Error adding report:', err);
-      setServerError(err.response?.data?.message || 'Failed to save report. Please check input values.');
+      console.error('Failed to submit report:', err);
+      setServerError(err.response?.data?.message || 'Failed to save blood report. Please verify all entries.');
     } finally {
       setIsSubmitting(false);
     }
@@ -310,7 +341,7 @@ const AddReportPage = () => {
     <div>
       <div className="page-header">
         <div>
-          <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', marginBottom: '8px' }}>
+          <Link to="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', marginBottom: '8px' }}>
             <ArrowLeft size={16} /> Back to Dashboard
           </Link>
           <h1 className="page-title">Add Blood Test Report</h1>
@@ -319,350 +350,530 @@ const AddReportPage = () => {
       </div>
 
       {serverError && (
-        <div className="error-banner">
+        <div className="error-banner" role="alert">
           <AlertCircle size={18} />
           <span>{serverError}</span>
         </div>
       )}
 
-      {uploadSuccessMessage && (
-        <div style={{ marginBottom: '20px', padding: '12px 16px', backgroundColor: 'var(--status-normal-bg)', color: 'var(--status-normal-text)', border: '1px solid var(--status-normal-border)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <CheckCircle2 size={18} />
-          <span>{uploadSuccessMessage}</span>
+      {/* Entry Mode Selector Tabs */}
+      <div className="tab-selector-bar" role="tablist" aria-label="Report entry method">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeMode === 'pdf'}
+          className={`tab-selector-btn ${activeMode === 'pdf' ? 'active' : ''}`}
+          onClick={() => setActiveMode('pdf')}
+        >
+          <UploadCloud size={18} />
+          <span>Upload PDF (Recommended)</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeMode === 'manual'}
+          className={`tab-selector-btn ${activeMode === 'manual' ? 'active' : ''}`}
+          onClick={() => setActiveMode('manual')}
+        >
+          <FileSpreadsheet size={18} />
+          <span>Manual Form Entry</span>
+        </button>
+      </div>
+
+      {/* MODE 1: PDF UPLOAD ZONE & EXTRACTION PREVIEW */}
+      {activeMode === 'pdf' && (
+        <div>
+          <PdfDropzone
+            file={pdfFile}
+            onFileSelected={handlePdfSelected}
+            onClearFile={handleClearPdf}
+            isLoading={isExtracting}
+            error={uploadError}
+            disabled={isExtracting || isSubmitting}
+          />
+
+          {uploadError && !isExtracting && (
+            <div className="card" style={{ marginBottom: '24px', backgroundColor: '#FEF2F2', borderColor: '#FECACA' }}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <AlertCircle size={20} style={{ color: '#DC2626', flexShrink: 0, marginTop: '2px' }} />
+                <div>
+                  <h4 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#991B1B', marginBottom: '4px' }}>
+                    Extraction Encountered an Issue
+                  </h4>
+                  <p style={{ fontSize: '0.875rem', color: '#B91C1C', marginBottom: '12px' }}>
+                    {uploadError}
+                  </p>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleClearPdf}
+                    >
+                      <RefreshCw size={14} />
+                      <span>Try Another PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => setActiveMode('manual')}
+                    >
+                      <span>Switch to Manual Form</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* EXTRACTION PREVIEW COMPONENT */}
+          {extractionResult && !isExtracting && (
+            <div className="extraction-preview-container card">
+              <div className="extraction-header-banner">
+                <div className="extraction-banner-left">
+                  <CheckCircle2 size={22} className="flex-shrink-0" />
+                  <div>
+                    <h3 className="extraction-banner-title">
+                      {extractionResult.message || `Extracted ${state.parameters.length} biomarkers successfully`}
+                    </h3>
+                    <p className="extraction-banner-sub">
+                      Review detected parameters and laboratory metadata below. You can edit values, add missing rows, or remove parameters before confirming.
+                    </p>
+                  </div>
+                </div>
+
+                {extractionResult.preliminaryHealthScore !== undefined && (
+                  <div className="preliminary-score-badge">
+                    <Sparkles size={16} />
+                    <span>Est. Score: {extractionResult.preliminaryHealthScore}/100</span>
+                  </div>
+                )}
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                {/* Editable Metadata Fields */}
+                <div className="extraction-meta-grid">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" htmlFor="preview-labName">Laboratory / Clinic Name *</label>
+                    <input
+                      id="preview-labName"
+                      type="text"
+                      className={`form-input ${validationErrors.labName ? 'has-error' : ''}`}
+                      placeholder="e.g. Dr. Lal PathLabs / Quest Diagnostics"
+                      value={state.labName}
+                      onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'labName', value: e.target.value })}
+                    />
+                    {validationErrors.labName && <p className="form-error">{validationErrors.labName}</p>}
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" htmlFor="preview-testDate">Test Date *</label>
+                    <input
+                      id="preview-testDate"
+                      type="date"
+                      className={`form-input ${validationErrors.testDate ? 'has-error' : ''}`}
+                      value={state.testDate}
+                      onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'testDate', value: e.target.value })}
+                    />
+                    {validationErrors.testDate && <p className="form-error">{validationErrors.testDate}</p>}
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" htmlFor="preview-sampleType">Specimen / Sample Type</label>
+                    <select
+                      id="preview-sampleType"
+                      className="form-select"
+                      value={state.sampleType}
+                      onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'sampleType', value: e.target.value })}
+                    >
+                      <option value="Venous Blood">Venous Blood</option>
+                      <option value="Capillary Blood">Capillary Blood</option>
+                      <option value="Arterial Blood">Arterial Blood</option>
+                      <option value="Urine Sample">Urine Sample</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Editable Parameters Preview Table */}
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    Extracted Biomarkers ({state.parameters.length})
+                  </h4>
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+                    Status automatically recomputed as you edit
+                  </span>
+                </div>
+
+                <div className="extraction-table-wrapper">
+                  <table className="extraction-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '28%' }}>Biomarker Name</th>
+                        <th style={{ width: '16%' }}>Measured Value</th>
+                        <th style={{ width: '12%' }}>Unit</th>
+                        <th style={{ width: '22%' }}>Normal Range</th>
+                        <th style={{ width: '14%' }}>Live Status</th>
+                        <th style={{ width: '8%', textAlign: 'center' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {state.parameters.map((param, idx) => {
+                        const paramErr = validationErrors.parameters?.[idx];
+                        const isRecognized = references.some((r) =>
+                          r.canonicalName.toLowerCase() === (param.name || '').toLowerCase() ||
+                          (Array.isArray(r.aliases) && r.aliases.some((a) => a.toLowerCase() === (param.name || '').toLowerCase()))
+                        );
+
+                        return (
+                          <tr key={idx} className={!isRecognized && param.name ? 'row-flagged' : ''}>
+                            {/* Biomarker Name */}
+                            <td>
+                              <input
+                                type="text"
+                                className={`param-input-sm ${paramErr?.name ? 'has-error' : ''}`}
+                                placeholder="Biomarker Name"
+                                value={param.name}
+                                onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'name', value: e.target.value })}
+                                onBlur={(e) => handleNameBlur(idx, e.target.value)}
+                              />
+                              {!isRecognized && param.name && (
+                                <div className="confidence-warning-badge" title="This biomarker was not matched against the canonical database. Values will still be saved.">
+                                  <AlertCircle size={12} />
+                                  <span>Custom Biomarker</span>
+                                </div>
+                              )}
+                              {paramErr?.name && <p className="form-error" style={{ fontSize: '0.75rem' }}>{paramErr.name}</p>}
+                            </td>
+
+                            {/* Measured Value */}
+                            <td>
+                              <input
+                                type="text"
+                                className={`param-input-sm number-cell ${paramErr?.value ? 'has-error' : ''}`}
+                                placeholder="e.g. 14.2"
+                                value={param.value}
+                                onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'value', value: e.target.value })}
+                              />
+                              {paramErr?.value && <p className="form-error" style={{ fontSize: '0.75rem' }}>{paramErr.value}</p>}
+                            </td>
+
+                            {/* Unit */}
+                            <td>
+                              <input
+                                type="text"
+                                className="param-input-sm"
+                                placeholder="unit"
+                                value={param.unit}
+                                onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'unit', value: e.target.value })}
+                              />
+                            </td>
+
+                            {/* Reference Ranges */}
+                            <td>
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                <input
+                                  type="text"
+                                  className="param-input-sm number-cell"
+                                  placeholder="Low"
+                                  style={{ maxWidth: '75px' }}
+                                  value={param.normalRangeLow}
+                                  onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'normalRangeLow', value: e.target.value })}
+                                />
+                                <span style={{ color: 'var(--text-muted)' }}>–</span>
+                                <input
+                                  type="text"
+                                  className="param-input-sm number-cell"
+                                  placeholder="High"
+                                  style={{ maxWidth: '75px' }}
+                                  value={param.normalRangeHigh}
+                                  onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'normalRangeHigh', value: e.target.value })}
+                                />
+                              </div>
+                            </td>
+
+                            {/* Live Status Badge */}
+                            <td>
+                              <StatusBadge status={param.status} />
+                            </td>
+
+                            {/* Delete Action */}
+                            <td style={{ textAlign: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => dispatch({ type: 'REMOVE_PARAM', index: idx })}
+                                disabled={state.parameters.length <= 1}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '4px 8px', border: 'none', color: 'var(--text-light)' }}
+                                title="Delete this biomarker row"
+                                aria-label={`Delete biomarker row ${idx + 1}`}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Add Row Button */}
+                <div style={{ marginBottom: '24px' }}>
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: 'ADD_PARAM' })}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <PlusCircle size={16} />
+                    <span>Add Missing Biomarker Row</span>
+                  </button>
+                </div>
+
+                {/* Confirm / Reset Action Buttons */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                  <button
+                    type="button"
+                    onClick={handleClearPdf}
+                    className="btn btn-secondary"
+                    disabled={isSubmitting}
+                  >
+                    Cancel / Choose Another File
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 size={18} className="animate-spin" />
+                        <span>Saving Analysis Report...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save size={18} />
+                        <span>Confirm and Save Report</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
       )}
 
-      {/* PDF Upload Dropzone */}
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        style={{
-          border: `2px dashed ${isDragging ? 'var(--primary-teal)' : 'var(--border-color)'}`,
-          backgroundColor: isDragging ? 'var(--primary-teal-light)' : 'white',
-          borderRadius: 'var(--radius-lg)',
-          padding: '28px 20px',
-          textAlign: 'center',
-          marginBottom: '24px',
-          transition: 'all 0.2s ease',
-          cursor: 'pointer'
-        }}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,application/pdf,image/png,image/jpeg,image/jpg,image/webp"
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            if (e.target.files && e.target.files[0]) {
-              handlePdfUpload(e.target.files[0]);
-            }
-          }}
-        />
+      {/* MODE 2: MANUAL ENTRY FORM */}
+      {activeMode === 'manual' && (
+        <div className="card">
+          <form onSubmit={handleSubmit}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '28px' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" htmlFor="manual-labName">Laboratory Name *</label>
+                <input
+                  id="manual-labName"
+                  type="text"
+                  className={`form-input ${validationErrors.labName ? 'has-error' : ''}`}
+                  placeholder="e.g. MetroPath Diagnostics"
+                  value={state.labName}
+                  onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'labName', value: e.target.value })}
+                />
+                {validationErrors.labName && <p className="form-error">{validationErrors.labName}</p>}
+              </div>
 
-        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: 'var(--primary-teal-light)', color: 'var(--primary-teal)', marginBottom: '12px' }}>
-          {isUploadingPdf ? <Loader2 size={26} className="animate-spin" /> : <UploadCloud size={26} />}
-        </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" htmlFor="manual-testDate">Test Date *</label>
+                <input
+                  id="manual-testDate"
+                  type="date"
+                  className={`form-input ${validationErrors.testDate ? 'has-error' : ''}`}
+                  value={state.testDate}
+                  onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'testDate', value: e.target.value })}
+                />
+                {validationErrors.testDate && <p className="form-error">{validationErrors.testDate}</p>}
+              </div>
 
-        <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--text-main)' }}>
-          {isUploadingPdf ? 'Analyzing Report with OCR & Parser...' : 'Upload Blood Report (PDF or Scanned Image)'}
-        </h3>
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '520px', margin: '4px auto 0' }}>
-          Drag and drop your digital lab report PDF, scanned report, or lab photo (PNG, JPG) here, or <strong style={{ color: 'var(--primary-teal)' }}>browse files</strong>. LabLens uses OCR & smart parsing to automatically extract biomarker values.
-        </p>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" htmlFor="manual-collectionDate">Collection Date</label>
+                <input
+                  id="manual-collectionDate"
+                  type="date"
+                  className="form-input"
+                  value={state.collectionDate}
+                  onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'collectionDate', value: e.target.value })}
+                />
+              </div>
 
-        {pdfFile && !isUploadingPdf && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '12px', padding: '4px 12px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', color: 'var(--text-main)' }}>
-            <FileText size={14} style={{ color: 'var(--primary-teal)' }} />
-            <span>{pdfFile.name}</span>
-          </div>
-        )}
-
-        <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
-          <a
-            href="/sample_blood_report.pdf"
-            download="sample_blood_report.pdf"
-            style={{
-              fontSize: '0.8125rem',
-              color: 'var(--primary-teal)',
-              textDecoration: 'none',
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              backgroundColor: 'var(--bg-subtle)',
-              border: '1px solid var(--border-color)'
-            }}
-          >
-            📥 Sample 1: Routine Health (PDF)
-          </a>
-          <a
-            href="/sample_metabolic_diabetes_report.pdf"
-            download="sample_metabolic_diabetes_report.pdf"
-            style={{
-              fontSize: '0.8125rem',
-              color: 'var(--primary-teal)',
-              textDecoration: 'none',
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              backgroundColor: 'var(--bg-subtle)',
-              border: '1px solid var(--border-color)'
-            }}
-          >
-            📥 Sample 2: Diabetic & Metabolic (PDF)
-          </a>
-          <a
-            href="/sample_cbc_thyroid_report.pdf"
-            download="sample_cbc_thyroid_report.pdf"
-            style={{
-              fontSize: '0.8125rem',
-              color: 'var(--primary-teal)',
-              textDecoration: 'none',
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '6px 10px',
-              borderRadius: '4px',
-              backgroundColor: 'var(--bg-subtle)',
-              border: '1px solid var(--border-color)'
-            }}
-          >
-            📥 Sample 3: CBC & Thyroid (PDF)
-          </a>
-        </div>
-      </div>
-
-      <div className="card">
-        {/* Panel Templates */}
-        <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: 'var(--primary-teal-light)', borderRadius: 'var(--radius-md)', border: '1px solid #B2DDDD' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary-teal)', fontWeight: 600, fontSize: '0.875rem', marginBottom: '8px' }}>
-            <Sparkles size={18} />
-            <span>Or Choose a Quick Panel Template (Auto-fills reference ranges for your profile)</span>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {['Lipid Profile', 'Liver Function', 'Kidney Function', 'CBC with Differential', 'Thyroid Panel', 'Glucose & HbA1c', 'Urine Routine'].map((panel) => (
-              <button
-                key={panel}
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => loadPanelTemplate(panel)}
-              >
-                <FileSpreadsheet size={14} />
-                <span>{panel}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          {/* General Metadata */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" htmlFor="labName">Diagnostic Lab Name *</label>
-              <input
-                id="labName"
-                type="text"
-                className="form-input"
-                placeholder="e.g. Quest Diagnostics, LabCorp"
-                value={state.labName}
-                onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'labName', value: e.target.value })}
-              />
-              {validationErrors.labName && <p className="form-error">{validationErrors.labName}</p>}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" htmlFor="manual-sampleType">Specimen / Sample Type</label>
+                <select
+                  id="manual-sampleType"
+                  className="form-select"
+                  value={state.sampleType}
+                  onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'sampleType', value: e.target.value })}
+                >
+                  <option value="Venous Blood">Venous Blood</option>
+                  <option value="Capillary Blood">Capillary Blood</option>
+                  <option value="Arterial Blood">Arterial Blood</option>
+                  <option value="Urine Sample">Urine Sample</option>
+                </select>
+              </div>
             </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" htmlFor="testDate">Sample Collection Date *</label>
-              <input
-                id="testDate"
-                type="date"
-                className="form-input"
-                value={state.testDate}
-                onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'testDate', value: e.target.value })}
-              />
-              {validationErrors.testDate && <p className="form-error">{validationErrors.testDate}</p>}
+            {/* Quick Panel Preset Templates */}
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <Sparkles size={16} color="var(--primary-teal)" />
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                  Load Routine Panel Preset:
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {['CBC with Differential', 'Glucose & HbA1c', 'Lipid Profile', 'Liver Function', 'Kidney Function', 'Thyroid Panel'].map((panel) => (
+                  <button
+                    key={panel}
+                    type="button"
+                    onClick={() => loadPanelTemplate(panel)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    {panel}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" htmlFor="sampleType">Sample Specimen Type</label>
-              <select
-                id="sampleType"
-                className="form-select"
-                value={state.sampleType}
-                onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'sampleType', value: e.target.value })}
-              >
-                <option value="Venous Blood">Venous Blood</option>
-                <option value="Capillary Blood">Capillary Blood</option>
-                <option value="Urine Sample">Urine Sample</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: '28px' }}>
-            <label className="form-label" htmlFor="notes">Clinical Notes / Comments (Optional)</label>
-            <input
-              id="notes"
-              type="text"
-              className="form-input"
-              placeholder="e.g. Fasted 12 hrs prior to blood draw, routine checkup"
-              value={state.notes}
-              onChange={(e) => dispatch({ type: 'SET_FIELD', field: 'notes', value: e.target.value })}
-            />
-          </div>
-
-          {/* Dynamic Parameters List */}
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                Biomarkers & Reference Ranges
+            {/* Manual Biomarkers Table */}
+            <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                Biomarkers & Results ({state.parameters.length})
               </h3>
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
                 onClick={() => dispatch({ type: 'ADD_PARAM' })}
+                className="btn btn-secondary btn-sm"
               >
                 <PlusCircle size={16} />
-                <span>Add Biomarker Row</span>
+                <span>Add Row</span>
               </button>
             </div>
 
-            {state.parameters.map((param, index) => {
-              const rowErr = validationErrors.parameters?.[index] || {};
-
-              return (
-                <div key={index} style={{ padding: '14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: '12px', backgroundColor: 'var(--bg-subtle)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr auto', gap: '10px', alignItems: 'start' }}>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Biomarker Name</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Total Cholesterol"
-                        value={param.name}
-                        onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'name', value: e.target.value })}
-                        onBlur={(e) => handleNameBlur(index, e.target.value)}
-                      />
-                      {rowErr.name && <p className="form-error">{rowErr.name}</p>}
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Type</label>
-                      <select
-                        className="form-select"
-                        value={param.resultType || 'numeric'}
-                        onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'resultType', value: e.target.value })}
-                      >
-                        <option value="numeric">Numeric</option>
-                        <option value="text">Text Result</option>
-                      </select>
-                    </div>
-
-                    {param.resultType === 'numeric' ? (
-                      <div>
-                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Value</label>
-                        <input
-                          type="number"
-                          step="any"
-                          className="form-input number-cell"
-                          placeholder="e.g. 185"
-                          value={param.value}
-                          onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'value', value: e.target.value })}
-                        />
-                        {rowErr.value && <p className="form-error">{rowErr.value}</p>}
-                      </div>
-                    ) : (
-                      <div>
-                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Text Result</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="e.g. Negative, Trace"
-                          value={param.textValue}
-                          onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'textValue', value: e.target.value })}
-                        />
-                        {rowErr.textValue && <p className="form-error">{rowErr.textValue}</p>}
-                      </div>
-                    )}
-
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Unit</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. mg/dL"
-                        value={param.unit}
-                        onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'unit', value: e.target.value })}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Ref Range / Text</label>
-                      {param.resultType === 'numeric' ? (
-                        <div style={{ display: 'flex', gap: '4px' }}>
+            <div className="extraction-table-wrapper">
+              <table className="extraction-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '28%' }}>Biomarker Name</th>
+                    <th style={{ width: '16%' }}>Measured Value</th>
+                    <th style={{ width: '12%' }}>Unit</th>
+                    <th style={{ width: '22%' }}>Normal Range</th>
+                    <th style={{ width: '14%' }}>Status</th>
+                    <th style={{ width: '8%', textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.parameters.map((param, idx) => {
+                    const paramErr = validationErrors.parameters?.[idx];
+                    return (
+                      <tr key={idx}>
+                        <td>
                           <input
-                            type="number"
-                            step="any"
-                            className="form-input number-cell"
-                            placeholder="Low"
-                            value={param.normalRangeLow}
-                            onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'normalRangeLow', value: e.target.value })}
+                            type="text"
+                            className={`param-input-sm ${paramErr?.name ? 'has-error' : ''}`}
+                            placeholder="e.g. Hemoglobin"
+                            value={param.name}
+                            onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'name', value: e.target.value })}
+                            onBlur={(e) => handleNameBlur(idx, e.target.value)}
                           />
+                          {paramErr?.name && <p className="form-error" style={{ fontSize: '0.75rem' }}>{paramErr.name}</p>}
+                        </td>
+
+                        <td>
                           <input
-                            type="number"
-                            step="any"
-                            className="form-input number-cell"
-                            placeholder="High"
-                            value={param.normalRangeHigh}
-                            onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'normalRangeHigh', value: e.target.value })}
+                            type="text"
+                            className={`param-input-sm number-cell ${paramErr?.value ? 'has-error' : ''}`}
+                            placeholder="Value"
+                            value={param.value}
+                            onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'value', value: e.target.value })}
                           />
-                        </div>
-                      ) : (
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="Ref text (Negative)"
-                          value={param.referenceText}
-                          onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index, field: 'referenceText', value: e.target.value })}
-                        />
-                      )}
-                    </div>
+                          {paramErr?.value && <p className="form-error" style={{ fontSize: '0.75rem' }}>{paramErr.value}</p>}
+                        </td>
 
-                    <div style={{ paddingTop: '20px' }}>
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm"
-                        style={{ padding: '10px' }}
-                        onClick={() => dispatch({ type: 'REMOVE_PARAM', index })}
-                        disabled={state.parameters.length <= 1}
-                        title="Delete row"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                        <td>
+                          <input
+                            type="text"
+                            className="param-input-sm"
+                            placeholder="unit"
+                            value={param.unit}
+                            onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'unit', value: e.target.value })}
+                          />
+                        </td>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '32px', paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
-            <Link to="/" className="btn btn-secondary">
-              Cancel
-            </Link>
-            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-              <Save size={18} />
-              <span>{isSubmitting ? 'Saving Analysis Report...' : 'Save Blood Report'}</span>
-            </button>
-          </div>
-        </form>
-      </div>
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <input
+                              type="text"
+                              className="param-input-sm number-cell"
+                              placeholder="Low"
+                              style={{ maxWidth: '75px' }}
+                              value={param.normalRangeLow}
+                              onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'normalRangeLow', value: e.target.value })}
+                            />
+                            <span style={{ color: 'var(--text-muted)' }}>–</span>
+                            <input
+                              type="text"
+                              className="param-input-sm number-cell"
+                              placeholder="High"
+                              style={{ maxWidth: '75px' }}
+                              value={param.normalRangeHigh}
+                              onChange={(e) => dispatch({ type: 'UPDATE_PARAM', index: idx, field: 'normalRangeHigh', value: e.target.value })}
+                            />
+                          </div>
+                        </td>
+
+                        <td>
+                          <StatusBadge status={param.status} />
+                        </td>
+
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => dispatch({ type: 'REMOVE_PARAM', index: idx })}
+                            disabled={state.parameters.length <= 1}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '4px 8px', border: 'none', color: 'var(--text-light)' }}
+                            title="Delete this biomarker row"
+                            aria-label={`Delete biomarker row ${idx + 1}`}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '14px', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+              <Link to="/dashboard" className="btn btn-secondary">
+                Cancel
+              </Link>
+              <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Saving Analysis Report...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    <span>Save Blood Report</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
