@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, requireRole } = require('../middleware/authMiddleware');
+const upload = require('../middleware/uploadMiddleware');
 const {
   getReports,
   getReportById,
@@ -8,7 +9,8 @@ const {
   getParameterReferences,
   createReport,
   deleteReport,
-  getTrendsData
+  getTrendsData,
+  parseReportPDF
 } = require('../controllers/reportController');
 
 router.use(protect);
@@ -19,6 +21,7 @@ router.get('/trends/all', getTrendsData);
 router.get('/:id', getReportById);
 router.get('/:id/analysis', getReportAnalysis);
 
+router.post('/upload-pdf', requireRole('patient'), upload.single('reportPdf'), parseReportPDF);
 router.post('/', requireRole('patient'), createReport);
 router.delete('/:id', requireRole('patient'), deleteReport);
 

@@ -23,7 +23,7 @@ const ProtectedRoute = ({ children, roles }) => {
     if (user?.role === 'doctor') {
       return <Navigate to="/doctor" replace />;
     } else {
-      return <Navigate to="/dashboard" replace />;
+      return <Navigate to="/" replace />;
     }
   }
 

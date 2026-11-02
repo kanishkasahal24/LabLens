@@ -2,6 +2,9 @@ const assert = require('assert');
 const { getParameterStatus, getSeverity, getRangeForAgeSex } = require('../utils/parameterStatus');
 const { calculateHealthScore, getVitalsGrid, getCriticalParameters, getRuleBasedAdvisory } = require('../utils/analysisEngine');
 const { canAccessReport } = require('../utils/accessControl');
+const { extractMetadata, parseBiomarkersFromText } = require('../utils/pdfParser');
+const ParameterReference = require('../models/ParameterReference');
+const mongoose = require('mongoose');
 
 async function runTests() {
   console.log('Running LabLens Unit & Security Tests...\n');
@@ -59,17 +62,14 @@ async function runTests() {
   });
 
   test('getSeverity - <10% outside gives mild', () => {
-    // 16 * 1.05 = 16.8 (5% over max high of 16.0)
     assert.strictEqual(getSeverity(16.8, 12.0, 16.0, 'high'), 'mild');
   });
 
   test('getSeverity - 10-30% outside gives moderate', () => {
-    // 16 * 1.20 = 19.2 (20% over max high of 16.0)
     assert.strictEqual(getSeverity(19.2, 12.0, 16.0, 'high'), 'moderate');
   });
 
   test('getSeverity - >30% outside gives marked', () => {
-    // 16 * 1.40 = 22.4 (40% over max high of 16.0)
     assert.strictEqual(getSeverity(22.4, 12.0, 16.0, 'high'), 'marked');
   });
 
@@ -85,8 +85,8 @@ async function runTests() {
 
   test('calculateHealthScore - abnormal parameters deduct score proportionally', () => {
     const params = [
-      { name: 'Total Cholesterol', bodySystem: 'cholesterol', status: 'high', severity: 'marked' }, // -18 pts
-      { name: 'Fasting Blood Sugar', bodySystem: 'hba1c', status: 'high', severity: 'mild' } // -6 pts
+      { name: 'Total Cholesterol', bodySystem: 'cholesterol', status: 'high', severity: 'marked' },
+      { name: 'Fasting Blood Sugar', bodySystem: 'hba1c', status: 'high', severity: 'mild' }
     ];
     const { healthScore } = calculateHealthScore(params);
     assert.ok(healthScore < 100, 'Score should be less than 100');
@@ -106,6 +106,20 @@ async function runTests() {
     const reportB = { user: 'user999' };
     const allowed = await canAccessReport(patientUserA, reportB);
     assert.strictEqual(allowed, false);
+  });
+
+  // 5. PDF Parser & Metadata Tests
+  test('extractMetadata - detects lab name and dates correctly', () => {
+    const sampleText = `
+      Quest Diagnostics Pathology Lab
+      Date of Collection: 15-Jan-2026
+      Patient: John Doe
+      Specimen: Venous Blood
+    `;
+    const meta = extractMetadata(sampleText);
+    assert.strictEqual(meta.labName, 'Quest Diagnostics');
+    assert.strictEqual(meta.sampleType, 'Venous Blood');
+    assert.ok(meta.testDate instanceof Date);
   });
 
   console.log(`\nTest Suite Summary: ${passed} passed, ${failed} failed.`);

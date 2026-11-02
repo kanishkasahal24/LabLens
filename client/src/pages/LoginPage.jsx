@@ -41,7 +41,7 @@ const LoginPage = () => {
       if (user.role === 'doctor') {
         navigate('/doctor');
       } else {
-        navigate('/dashboard');
+        navigate('/');
       }
     } catch (err) {
       setServerError(err.message);
@@ -59,7 +59,7 @@ const LoginPage = () => {
     try {
       setIsSubmitting(true);
       await login('john@example.com', 'Password123!');
-      navigate('/dashboard');
+      navigate('/');
     } catch (err) {
       setServerError(err.message || 'Patient demo login failed.');
     } finally {

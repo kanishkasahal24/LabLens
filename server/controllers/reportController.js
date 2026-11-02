@@ -431,6 +431,71 @@ const getTrendsData = async (req, res, next) => {
   }
 };
 
+/**
+ * @route   POST /api/reports/upload-pdf
+ * @desc    Upload lab report PDF, extract text, match biomarkers, and return structured editable draft
+ * @access  Private (Patient only)
+ */
+const parseReportPDF = async (req, res, next) => {
+  try {
+    if (req.user.role === 'doctor') {
+      return res.status(403).json({ message: 'Doctors cannot upload patient reports.' });
+    }
+
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ message: 'Please upload a valid PDF document.' });
+    }
+
+    const { extractTextFromPDF, extractMetadata, parseBiomarkersFromText } = require('../utils/pdfParser');
+
+    // 1. Extract text from PDF buffer
+    let rawText = '';
+    try {
+      rawText = await extractTextFromPDF(req.file.buffer);
+    } catch (parseErr) {
+      return res.status(422).json({
+        message: 'Unable to extract text from the PDF. The file may be password-protected or an image-only scan.'
+      });
+    }
+
+    if (!rawText || rawText.trim().length === 0) {
+      return res.status(422).json({
+        message: 'No readable text found in this PDF. Please ensure the document is a digital lab report or enter values manually.'
+      });
+    }
+
+    // 2. Fetch patient profile to contextualize reference ranges by age & sex
+    const patientProfile = await PatientProfile.findOne({ user: req.user.id });
+
+    // 3. Extract lab metadata (labName, testDate, sampleType)
+    const metadata = extractMetadata(rawText);
+
+    // 4. Parse biomarkers matching canonical ParameterReference database
+    const extractedParameters = await parseBiomarkersFromText(rawText, patientProfile);
+
+    // 5. Calculate preliminary health score for preview
+    const { healthScore, breakdown } = calculateHealthScore(extractedParameters);
+
+    res.json({
+      message: `Successfully extracted ${extractedParameters.length} biomarkers from PDF.`,
+      metadata: {
+        labName: metadata.labName,
+        testDate: metadata.testDate.toISOString().split('T')[0],
+        collectionDate: metadata.testDate.toISOString().split('T')[0],
+        sampleType: metadata.sampleType,
+        fileName: req.file.originalname,
+        fileSize: req.file.size
+      },
+      parameters: extractedParameters,
+      preliminaryHealthScore: healthScore,
+      scoreBreakdown: breakdown,
+      rawTextSnippet: rawText.substring(0, 500)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getReports,
   getReportById,
@@ -438,5 +503,7 @@ module.exports = {
   getParameterReferences,
   createReport,
   deleteReport,
-  getTrendsData
+  getTrendsData,
+  parseReportPDF
 };
+

@@ -1,6 +1,18 @@
-import React, { useReducer, useState, useEffect } from 'react';
+import React, { useReducer, useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { PlusCircle, Trash2, Save, ArrowLeft, AlertCircle, Sparkles, FileSpreadsheet } from 'lucide-react';
+import {
+  PlusCircle,
+  Trash2,
+  Save,
+  ArrowLeft,
+  AlertCircle,
+  Sparkles,
+  FileSpreadsheet,
+  UploadCloud,
+  FileText,
+  CheckCircle2,
+  Loader2
+} from 'lucide-react';
 import api from '../api/axios';
 
 const initialState = {
@@ -20,6 +32,9 @@ function formReducer(state, action) {
   switch (action.type) {
     case 'SET_FIELD':
       return { ...state, [action.field]: action.value };
+
+    case 'SET_ALL_FIELDS':
+      return { ...state, ...action.payload };
 
     case 'ADD_PARAM':
       return {
@@ -62,6 +77,13 @@ const AddReportPage = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState('');
+
+  // PDF Upload & Extraction States
+  const [pdfFile, setPdfFile] = useState(null);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [uploadSuccessMessage, setUploadSuccessMessage] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
 
   const navigate = useNavigate();
 
@@ -123,6 +145,81 @@ const AddReportPage = () => {
       if (match.resultType) {
         dispatch({ type: 'UPDATE_PARAM', index, field: 'resultType', value: match.resultType });
       }
+    }
+  };
+
+  // PDF Upload & Extraction Handler
+  const handlePdfUpload = async (file) => {
+    if (!file) return;
+
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setServerError('Please select a PDF document (.pdf).');
+      return;
+    }
+
+    setServerError('');
+    setUploadSuccessMessage('');
+    setIsUploadingPdf(true);
+    setPdfFile(file);
+
+    try {
+      const formData = new FormData();
+      formData.append('reportPdf', file);
+
+      const res = await api.post('/reports/upload-pdf', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      const { metadata, parameters, message } = res.data;
+
+      // Populate extracted metadata and biomarkers into form state
+      dispatch({
+        type: 'SET_ALL_FIELDS',
+        payload: {
+          labName: metadata.labName || state.labName,
+          testDate: metadata.testDate || state.testDate,
+          collectionDate: metadata.collectionDate || state.collectionDate,
+          sampleType: metadata.sampleType || state.sampleType,
+          notes: `Uploaded from ${metadata.fileName}. Automatically extracted ${parameters.length} biomarkers.`,
+          parameters: parameters.length > 0 ? parameters.map((p) => ({
+            name: p.name,
+            panel: p.panel || 'General',
+            resultType: p.resultType || 'numeric',
+            value: p.value !== null && p.value !== undefined ? String(p.value) : '',
+            textValue: p.textValue || '',
+            unit: p.unit || '',
+            normalRangeLow: p.normalRangeLow !== null && p.normalRangeLow !== undefined ? String(p.normalRangeLow) : '',
+            normalRangeHigh: p.normalRangeHigh !== null && p.normalRangeHigh !== undefined ? String(p.normalRangeHigh) : '',
+            referenceText: p.referenceText || ''
+          })) : state.parameters
+        }
+      });
+
+      setUploadSuccessMessage(message || `Extracted ${parameters.length} biomarkers from PDF. Review and edit values below before saving.`);
+    } catch (err) {
+      console.error('PDF extraction failed:', err);
+      setServerError(err.response?.data?.message || 'Failed to extract biomarkers from this PDF. Please enter values manually.');
+    } finally {
+      setIsUploadingPdf(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handlePdfUpload(e.dataTransfer.files[0]);
     }
   };
 
@@ -211,7 +308,7 @@ const AddReportPage = () => {
             <ArrowLeft size={16} /> Back to Dashboard
           </Link>
           <h1 className="page-title">Add Blood Test Report</h1>
-          <p className="page-subtitle">Enter biomarker results with panel templates and auto-filled clinical reference ranges</p>
+          <p className="page-subtitle">Upload your lab report PDF for automatic extraction or fill in biomarker values manually</p>
         </div>
       </div>
 
@@ -222,12 +319,88 @@ const AddReportPage = () => {
         </div>
       )}
 
+      {uploadSuccessMessage && (
+        <div style={{ marginBottom: '20px', padding: '12px 16px', backgroundColor: 'var(--status-normal-bg)', color: 'var(--status-normal-text)', border: '1px solid var(--status-normal-border)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <CheckCircle2 size={18} />
+          <span>{uploadSuccessMessage}</span>
+        </div>
+      )}
+
+      {/* PDF Upload Dropzone */}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        style={{
+          border: `2px dashed ${isDragging ? 'var(--primary-teal)' : 'var(--border-color)'}`,
+          backgroundColor: isDragging ? 'var(--primary-teal-light)' : 'white',
+          borderRadius: 'var(--radius-lg)',
+          padding: '28px 20px',
+          textAlign: 'center',
+          marginBottom: '24px',
+          transition: 'all 0.2s ease',
+          cursor: 'pointer'
+        }}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,application/pdf"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              handlePdfUpload(e.target.files[0]);
+            }
+          }}
+        />
+
+        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '52px', height: '52px', borderRadius: '50%', backgroundColor: 'var(--primary-teal-light)', color: 'var(--primary-teal)', marginBottom: '12px' }}>
+          {isUploadingPdf ? <Loader2 size={26} className="animate-spin" /> : <UploadCloud size={26} />}
+        </div>
+
+        <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--text-main)' }}>
+          {isUploadingPdf ? 'Analyzing PDF Lab Report...' : 'Upload Blood Report PDF'}
+        </h3>
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '480px', margin: '4px auto 0' }}>
+          Drag and drop your digital lab report PDF here, or <strong style={{ color: 'var(--primary-teal)' }}>browse files</strong>. LabLens will automatically extract test dates, lab names, and biomarker values.
+        </p>
+
+        {pdfFile && !isUploadingPdf && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '12px', padding: '4px 12px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', fontSize: '0.8125rem', color: 'var(--text-main)' }}>
+            <FileText size={14} style={{ color: 'var(--primary-teal)' }} />
+            <span>{pdfFile.name}</span>
+          </div>
+        )}
+
+        <div style={{ marginTop: '14px' }} onClick={(e) => e.stopPropagation()}>
+          <a
+            href="/sample_blood_report.pdf"
+            download="sample_blood_report.pdf"
+            style={{
+              fontSize: '0.8125rem',
+              color: 'var(--primary-teal)',
+              textDecoration: 'none',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              backgroundColor: 'var(--bg-subtle)'
+            }}
+          >
+            📥 Download Sample Lab Report (PDF) for testing
+          </a>
+        </div>
+      </div>
+
       <div className="card">
         {/* Panel Templates */}
         <div style={{ marginBottom: '24px', padding: '16px', backgroundColor: 'var(--primary-teal-light)', borderRadius: 'var(--radius-md)', border: '1px solid #B2DDDD' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary-teal)', fontWeight: 600, fontSize: '0.875rem', marginBottom: '8px' }}>
             <Sparkles size={18} />
-            <span>Smart Panel Templates (Auto-fills reference ranges for your age & sex)</span>
+            <span>Or Choose a Quick Panel Template (Auto-fills reference ranges for your profile)</span>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {['Lipid Profile', 'Liver Function', 'Kidney Function', 'CBC with Differential', 'Thyroid Panel', 'Glucose & HbA1c', 'Urine Routine'].map((panel) => (
@@ -303,7 +476,7 @@ const AddReportPage = () => {
           <div style={{ marginBottom: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                Test Biomarkers & Reference Ranges
+                Biomarkers & Reference Ranges
               </h3>
               <button
                 type="button"

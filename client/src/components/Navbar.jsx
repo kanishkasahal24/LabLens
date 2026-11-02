@@ -8,8 +8,8 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Keep Navbar hidden for unauthenticated users AND on the public landing page ("/")
-  if (!isAuthenticated || location.pathname === '/') return null;
+  // Keep Navbar hidden for unauthenticated users
+  if (!isAuthenticated) return null;
 
   const handleLogout = () => {
     logout();
@@ -30,7 +30,7 @@ const Navbar = () => {
   return (
     <header className="navbar">
       <div className="navbar-inner">
-        <Link to={isDoctor ? '/doctor' : '/dashboard'} className="brand">
+        <Link to={isDoctor ? '/doctor' : '/'} className="brand">
           <div className="brand-icon">
             <Activity size={22} />
           </div>
@@ -40,7 +40,7 @@ const Navbar = () => {
         <nav className="nav-links">
           {!isDoctor ? (
             <>
-              <NavLink to="/dashboard" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                 <LayoutDashboard size={18} />
                 <span>Dashboard</span>
               </NavLink>
