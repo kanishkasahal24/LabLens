@@ -76,6 +76,10 @@ const OnboardingPage = () => {
     if (!patientForm.weightKg || isNaN(w) || w < 2 || w > 500) {
       errors.weightKg = 'Weight must be between 2 kg and 500 kg';
     }
+    const validGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+    if (!patientForm.bloodGroup || !validGroups.includes(patientForm.bloodGroup)) {
+      errors.bloodGroup = 'Blood group is compulsory. Please select your blood group.';
+    }
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -357,13 +361,13 @@ const OnboardingPage = () => {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Blood Group (Optional)</label>
+              <label className="form-label">Blood Group *</label>
               <select
                 className="form-select"
                 value={patientForm.bloodGroup}
                 onChange={(e) => setPatientForm({ ...patientForm, bloodGroup: e.target.value })}
               >
-                <option value="Unknown">Don't Know / Unknown</option>
+                <option value="">-- Select Blood Group --</option>
                 <option value="A+">A+</option>
                 <option value="A-">A-</option>
                 <option value="B+">B+</option>
@@ -373,6 +377,7 @@ const OnboardingPage = () => {
                 <option value="O+">O+</option>
                 <option value="O-">O-</option>
               </select>
+              {fieldErrors.bloodGroup && <p className="form-error">{fieldErrors.bloodGroup}</p>}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '24px' }}>

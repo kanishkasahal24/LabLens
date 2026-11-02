@@ -1,4 +1,5 @@
-const pdfParse = require('pdf-parse');
+const pdfParseModule = require('pdf-parse');
+const Tesseract = require('tesseract.js');
 const ParameterReference = require('../models/ParameterReference');
 const { getParameterStatus, getSeverity, getRangeForAgeSex } = require('./parameterStatus');
 
@@ -10,11 +11,42 @@ const normalizeText = (text) => {
 };
 
 /**
- * Extracts raw text from a PDF Buffer using pdf-parse
+ * Extracts raw text from a PDF Buffer
+ * Supports both v1 (function) and v2+ (PDFParse class instance) of pdf-parse
  */
 const extractTextFromPDF = async (pdfBuffer) => {
-  const data = await pdfParse(pdfBuffer);
-  return data.text || '';
+  try {
+    if (typeof pdfParseModule === 'function') {
+      const data = await pdfParseModule(pdfBuffer);
+      return data.text || '';
+    } else if (pdfParseModule.PDFParse) {
+      const parser = new pdfParseModule.PDFParse({ data: pdfBuffer });
+      const result = await parser.getText();
+      return result?.text || '';
+    } else if (typeof pdfParseModule.default === 'function') {
+      const data = await pdfParseModule.default(pdfBuffer);
+      return data.text || '';
+    }
+    return '';
+  } catch (err) {
+    console.error('PDF parsing error:', err.message);
+    throw err;
+  }
+};
+
+/**
+ * Optical Character Recognition (OCR) for scanned PDFs and image files (PNG, JPG, etc.)
+ */
+const extractTextWithOCR = async (imageBuffer) => {
+  try {
+    const { data: { text } } = await Tesseract.recognize(imageBuffer, 'eng', {
+      logger: () => {} // quiet mode
+    });
+    return text || '';
+  } catch (err) {
+    console.error('Tesseract OCR error:', err.message);
+    throw err;
+  }
 };
 
 /**
@@ -221,6 +253,7 @@ const calculateAge = (dob) => {
 
 module.exports = {
   extractTextFromPDF,
+  extractTextWithOCR,
   extractMetadata,
   parseBiomarkersFromText
 };

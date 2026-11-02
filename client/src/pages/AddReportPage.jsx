@@ -148,12 +148,18 @@ const AddReportPage = () => {
     }
   };
 
-  // PDF Upload & Extraction Handler
+  // PDF & Image OCR Extraction Handler
   const handlePdfUpload = async (file) => {
     if (!file) return;
 
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      setServerError('Please select a PDF document (.pdf).');
+    const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
+    const fileNameLower = file.name.toLowerCase();
+    const isValid = validExtensions.some((ext) => fileNameLower.endsWith(ext)) ||
+      file.type === 'application/pdf' ||
+      file.type.startsWith('image/');
+
+    if (!isValid) {
+      setServerError('Please select a valid PDF document or report image (.pdf, .png, .jpg, .jpeg, .webp).');
       return;
     }
 
@@ -346,7 +352,7 @@ const AddReportPage = () => {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,application/pdf"
+          accept=".pdf,application/pdf,image/png,image/jpeg,image/jpg,image/webp"
           style={{ display: 'none' }}
           onChange={(e) => {
             if (e.target.files && e.target.files[0]) {
@@ -360,10 +366,10 @@ const AddReportPage = () => {
         </div>
 
         <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--text-main)' }}>
-          {isUploadingPdf ? 'Analyzing PDF Lab Report...' : 'Upload Blood Report PDF'}
+          {isUploadingPdf ? 'Analyzing Report with OCR & Parser...' : 'Upload Blood Report (PDF or Scanned Image)'}
         </h3>
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '480px', margin: '4px auto 0' }}>
-          Drag and drop your digital lab report PDF here, or <strong style={{ color: 'var(--primary-teal)' }}>browse files</strong>. LabLens will automatically extract test dates, lab names, and biomarker values.
+        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '520px', margin: '4px auto 0' }}>
+          Drag and drop your digital lab report PDF, scanned report, or lab photo (PNG, JPG) here, or <strong style={{ color: 'var(--primary-teal)' }}>browse files</strong>. LabLens uses OCR & smart parsing to automatically extract biomarker values.
         </p>
 
         {pdfFile && !isUploadingPdf && (
@@ -373,7 +379,7 @@ const AddReportPage = () => {
           </div>
         )}
 
-        <div style={{ marginTop: '14px' }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
           <a
             href="/sample_blood_report.pdf"
             download="sample_blood_report.pdf"
@@ -385,12 +391,51 @@ const AddReportPage = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              padding: '4px 8px',
+              padding: '6px 10px',
               borderRadius: '4px',
-              backgroundColor: 'var(--bg-subtle)'
+              backgroundColor: 'var(--bg-subtle)',
+              border: '1px solid var(--border-color)'
             }}
           >
-            📥 Download Sample Lab Report (PDF) for testing
+            📥 Sample 1: Routine Health (PDF)
+          </a>
+          <a
+            href="/sample_metabolic_diabetes_report.pdf"
+            download="sample_metabolic_diabetes_report.pdf"
+            style={{
+              fontSize: '0.8125rem',
+              color: 'var(--primary-teal)',
+              textDecoration: 'none',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              borderRadius: '4px',
+              backgroundColor: 'var(--bg-subtle)',
+              border: '1px solid var(--border-color)'
+            }}
+          >
+            📥 Sample 2: Diabetic & Metabolic (PDF)
+          </a>
+          <a
+            href="/sample_cbc_thyroid_report.pdf"
+            download="sample_cbc_thyroid_report.pdf"
+            style={{
+              fontSize: '0.8125rem',
+              color: 'var(--primary-teal)',
+              textDecoration: 'none',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 10px',
+              borderRadius: '4px',
+              backgroundColor: 'var(--bg-subtle)',
+              border: '1px solid var(--border-color)'
+            }}
+          >
+            📥 Sample 3: CBC & Thyroid (PDF)
           </a>
         </div>
       </div>

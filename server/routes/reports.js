@@ -6,6 +6,8 @@ const {
   getReports,
   getReportById,
   getReportAnalysis,
+  getLatestAdvisory,
+  compareReports,
   getParameterReferences,
   createReport,
   deleteReport,
@@ -16,6 +18,8 @@ const {
 router.use(protect);
 
 router.get('/', getReports);
+router.get('/advisory/latest', getLatestAdvisory);
+router.get('/compare', compareReports);
 router.get('/references/all', getParameterReferences);
 router.get('/trends/all', getTrendsData);
 router.get('/:id', getReportById);

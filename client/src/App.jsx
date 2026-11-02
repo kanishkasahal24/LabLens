@@ -12,6 +12,7 @@ import AddReportPage from './pages/AddReportPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import TrendsPage from './pages/TrendsPage';
 import ProfilePage from './pages/ProfilePage';
+import HealthAdvisoryPage from './pages/HealthAdvisoryPage';
 
 // Doctor Pages
 import DoctorDashboardPage from './pages/DoctorDashboardPage';
@@ -72,6 +73,14 @@ function App() {
                 element={
                   <ProtectedRoute roles={['patient']}>
                     <TrendsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/advisory"
+                element={
+                  <ProtectedRoute roles={['patient']}>
+                    <HealthAdvisoryPage />
                   </ProtectedRoute>
                 }
               />

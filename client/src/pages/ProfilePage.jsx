@@ -322,13 +322,14 @@ const ProfilePage = () => {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Blood Group</label>
+                    <label className="form-label">Blood Group *</label>
                     <select
                       className="form-select"
-                      value={formData.bloodGroup || 'Unknown'}
+                      required
+                      value={formData.bloodGroup || ''}
                       onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
                     >
-                      <option value="Unknown">Unknown</option>
+                      <option value="">-- Select Blood Group --</option>
                       <option value="A+">A+</option>
                       <option value="A-">A-</option>
                       <option value="B+">B+</option>

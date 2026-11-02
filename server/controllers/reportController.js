@@ -225,6 +225,188 @@ const getReportAnalysis = async (req, res, next) => {
 };
 
 /**
+ * @route   GET /api/reports/advisory/latest
+ * @desc    Get the latest personalised health advisory for patient
+ * @access  Private
+ */
+const getLatestAdvisory = async (req, res, next) => {
+  try {
+    let targetUserId = req.user.id;
+
+    if (req.user.role === 'doctor') {
+      const { patientId } = req.query;
+      if (!patientId) {
+        return res.status(400).json({ message: 'Patient ID is required for doctor access' });
+      }
+
+      const activeLink = await Link.findOne({
+        doctor: req.user.id,
+        patient: patientId,
+        status: 'active'
+      });
+
+      if (!activeLink) {
+        return res.status(403).json({ message: 'Access denied: Patient is not linked with you' });
+      }
+
+      targetUserId = patientId;
+    }
+
+    const latestReport = await Report.findOne({ user: targetUserId })
+      .sort({ testDate: -1 })
+      .populate('user', 'name email');
+
+    if (!latestReport) {
+      return res.status(404).json({ message: 'No blood reports found to generate advisory.' });
+    }
+
+    const patientProfile = await PatientProfile.findOne({ user: targetUserId });
+    const references = await ParameterReference.find({});
+    const paramRefMap = {};
+    references.forEach((ref) => {
+      paramRefMap[ref.canonicalName.toLowerCase()] = ref;
+    });
+
+    const enhancedParameters = latestReport.parameters.map((p) => {
+      const ref = paramRefMap[p.name.toLowerCase()];
+      return {
+        ...p.toObject(),
+        impact: ref?.impact || '',
+        howToImprove: ref?.howToImprove || ''
+      };
+    });
+
+    const { healthScore, breakdown } = calculateHealthScore(enhancedParameters);
+    const vitalsGrid = getVitalsGrid(enhancedParameters);
+    const criticalParameters = getCriticalParameters(enhancedParameters, paramRefMap);
+    const advisory = getRuleBasedAdvisory(patientProfile, criticalParameters, vitalsGrid);
+
+    res.json({
+      report: {
+        id: latestReport._id,
+        labName: latestReport.labName,
+        testDate: latestReport.testDate,
+        healthScore
+      },
+      patient: {
+        name: latestReport.user.name,
+        bloodGroup: patientProfile?.bloodGroup || 'N/A',
+        activity: patientProfile?.physicalActivity || 'sedentary'
+      },
+      vitalsGrid,
+      criticalParameters,
+      advisory,
+      scoreBreakdown: breakdown,
+      disclaimer: 'Medical Disclaimer: This personalised advisory is algorithmically generated based on your latest blood tests and health profile. It is intended for educational guidance and must be reviewed with a licensed physician.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @route   GET /api/reports/compare
+ * @desc    Compare any two blood reports side by side
+ * @access  Private
+ */
+const compareReports = async (req, res, next) => {
+  try {
+    const { report1Id, report2Id } = req.query;
+    if (!report1Id || !report2Id) {
+      return res.status(400).json({ message: 'Both report1Id and report2Id are required' });
+    }
+
+    const rep1 = await Report.findById(report1Id);
+    const rep2 = await Report.findById(report2Id);
+
+    if (!rep1 || !rep2) {
+      return res.status(404).json({ message: 'One or both reports could not be found' });
+    }
+
+    const canAcc1 = await canAccessReport(req.user, rep1);
+    const canAcc2 = await canAccessReport(req.user, rep2);
+    if (!canAcc1 || !canAcc2) {
+      return res.status(403).json({ message: 'Access denied to one or both reports' });
+    }
+
+    // Sort so earlier report is baseline
+    const isRep1Earlier = new Date(rep1.testDate) <= new Date(rep2.testDate);
+    const earlier = isRep1Earlier ? rep1 : rep2;
+    const later = isRep1Earlier ? rep2 : rep1;
+
+    const earlierParamMap = {};
+    earlier.parameters.forEach((p) => {
+      earlierParamMap[p.name.toLowerCase()] = p;
+    });
+
+    const comparisons = [];
+    const improvedList = [];
+    const concernList = [];
+
+    later.parameters.forEach((laterP) => {
+      const earlierP = earlierParamMap[laterP.name.toLowerCase()];
+      if (earlierP && laterP.resultType === 'numeric' && earlierP.resultType === 'numeric') {
+        const diff = Number((laterP.value - earlierP.value).toFixed(2));
+        const pctChange = earlierP.value !== 0 ? Number(((diff / earlierP.value) * 100).toFixed(1)) : 0;
+        
+        let direction = 'same';
+        if (diff > 0) direction = 'increased';
+        if (diff < 0) direction = 'decreased';
+
+        // Check if change is favorable
+        let trendEvaluation = 'neutral';
+        if (laterP.status === 'normal' && earlierP.status !== 'normal') {
+          trendEvaluation = 'improved';
+          improvedList.push(laterP.name);
+        } else if (laterP.status !== 'normal' && earlierP.status === 'normal') {
+          trendEvaluation = 'worsened';
+          concernList.push(laterP.name);
+        }
+
+        comparisons.push({
+          name: laterP.name,
+          panel: laterP.panel,
+          unit: laterP.unit,
+          earlierValue: earlierP.value,
+          earlierStatus: earlierP.status,
+          laterValue: laterP.value,
+          laterStatus: laterP.status,
+          diff,
+          pctChange,
+          direction,
+          trendEvaluation,
+          normalRangeLow: laterP.normalRangeLow,
+          normalRangeHigh: laterP.normalRangeHigh
+        });
+      }
+    });
+
+    res.json({
+      earlierReport: {
+        id: earlier._id,
+        labName: earlier.labName,
+        testDate: earlier.testDate,
+        healthScore: earlier.healthScore
+      },
+      laterReport: {
+        id: later._id,
+        labName: later.labName,
+        testDate: later.testDate,
+        healthScore: later.healthScore,
+        scoreDiff: (later.healthScore || 0) - (earlier.healthScore || 0)
+      },
+      comparisons,
+      summary: {
+        improved: [...new Set(improvedList)],
+        concerns: [...new Set(concernList)]
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * @route   GET /api/reports/references/all
  * @desc    Get all canonical parameter references with auto-filled ranges for user's age/sex
  * @access  Private
@@ -242,7 +424,21 @@ const getParameterReferences = async (req, res, next) => {
       }
     }
 
-    const references = await ParameterReference.find({}).sort({ panel: 1, canonicalName: 1 });
+    const { panel, search } = req.query;
+    const filter = {};
+    if (panel && panel !== 'All') {
+      filter.panel = new RegExp(panel, 'i');
+    }
+    if (search && search.trim()) {
+      const s = search.trim();
+      filter.$or = [
+        { canonicalName: new RegExp(s, 'i') },
+        { aliases: new RegExp(s, 'i') },
+        { impact: new RegExp(s, 'i') }
+      ];
+    }
+
+    const references = await ParameterReference.find(filter).sort({ panel: 1, canonicalName: 1 });
 
     const formattedRefs = references.map((ref) => {
       const range = getRangeForAgeSex(ref, age, sex);
@@ -443,24 +639,58 @@ const parseReportPDF = async (req, res, next) => {
     }
 
     if (!req.file || !req.file.buffer) {
-      return res.status(400).json({ message: 'Please upload a valid PDF document.' });
+      return res.status(400).json({ message: 'Please upload a valid lab report PDF or image.' });
     }
 
-    const { extractTextFromPDF, extractMetadata, parseBiomarkersFromText } = require('../utils/pdfParser');
+    const { extractTextFromPDF, extractTextWithOCR, extractMetadata, parseBiomarkersFromText } = require('../utils/pdfParser');
 
-    // 1. Extract text from PDF buffer
+    const originalName = (req.file.originalname || '').toLowerCase();
+    const mimeType = req.file.mimetype || '';
+    const isImage = mimeType.startsWith('image/') || originalName.endsWith('.png') || originalName.endsWith('.jpg') || originalName.endsWith('.jpeg') || originalName.endsWith('.webp');
+
     let rawText = '';
-    try {
-      rawText = await extractTextFromPDF(req.file.buffer);
-    } catch (parseErr) {
-      return res.status(422).json({
-        message: 'Unable to extract text from the PDF. The file may be password-protected or an image-only scan.'
-      });
+    let extractionMethod = 'digital';
+
+    if (isImage) {
+      // 1a. Directly perform OCR for image files
+      try {
+        extractionMethod = 'ocr';
+        rawText = await extractTextWithOCR(req.file.buffer);
+      } catch (ocrErr) {
+        return res.status(422).json({
+          message: 'Unable to read text from the image. Please ensure the image is clear and well lit.'
+        });
+      }
+    } else {
+      // 1b. Try digital PDF text extraction first
+      try {
+        rawText = await extractTextFromPDF(req.file.buffer);
+      } catch (parseErr) {
+        // Fall back to OCR if digital parsing throws
+        try {
+          extractionMethod = 'ocr';
+          rawText = await extractTextWithOCR(req.file.buffer);
+        } catch (ocrErr) {
+          return res.status(422).json({
+            message: 'Unable to extract text from the document. The file may be password-protected or unreadable.'
+          });
+        }
+      }
+
+      // If digital PDF returned no characters (scanned PDF), run OCR
+      if (!rawText || rawText.trim().length === 0) {
+        try {
+          extractionMethod = 'ocr';
+          rawText = await extractTextWithOCR(req.file.buffer);
+        } catch (ocrErr) {
+          console.warn('OCR fallback error:', ocrErr.message);
+        }
+      }
     }
 
     if (!rawText || rawText.trim().length === 0) {
       return res.status(422).json({
-        message: 'No readable text found in this PDF. Please ensure the document is a digital lab report or enter values manually.'
+        message: 'No readable text or biomarkers found in this document. Please ensure the report is legible or enter values manually.'
       });
     }
 
@@ -477,7 +707,8 @@ const parseReportPDF = async (req, res, next) => {
     const { healthScore, breakdown } = calculateHealthScore(extractedParameters);
 
     res.json({
-      message: `Successfully extracted ${extractedParameters.length} biomarkers from PDF.`,
+      message: `Successfully extracted ${extractedParameters.length} biomarkers from ${extractionMethod === 'ocr' ? 'OCR document scan' : 'lab report'}.`,
+      extractionMethod,
       metadata: {
         labName: metadata.labName,
         testDate: metadata.testDate.toISOString().split('T')[0],
@@ -500,6 +731,8 @@ module.exports = {
   getReports,
   getReportById,
   getReportAnalysis,
+  getLatestAdvisory,
+  compareReports,
   getParameterReferences,
   createReport,
   deleteReport,

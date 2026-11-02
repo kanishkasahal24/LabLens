@@ -4,11 +4,22 @@ const multer = require('multer');
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  const allowedMimes = ['application/pdf', 'application/x-pdf'];
-  if (allowedMimes.includes(file.mimetype) || file.originalname.toLowerCase().endsWith('.pdf')) {
+  const allowedMimes = [
+    'application/pdf',
+    'application/x-pdf',
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/webp'
+  ];
+  const name = file.originalname.toLowerCase();
+  const isPdf = name.endsWith('.pdf');
+  const isImage = name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.webp');
+
+  if (allowedMimes.includes(file.mimetype) || isPdf || isImage) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only PDF lab reports are supported.'), false);
+    cb(new Error('Invalid file type. Please upload a PDF or an image (PNG, JPG, WEBP).'), false);
   }
 };
 

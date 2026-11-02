@@ -111,6 +111,11 @@ const updateProfile = async (req, res, next) => {
       return res.status(400).json({ message: 'Weight must be between 2 kg and 500 kg' });
     }
 
+    const validBloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+    if (!bloodGroup || !validBloodGroups.includes(bloodGroup)) {
+      return res.status(400).json({ message: 'Please select a valid blood group (A+, A-, B+, B-, AB+, AB-, O+, O-)' });
+    }
+
     let patientProf = await PatientProfile.findOne({ user: req.user.id });
 
     const profileData = {

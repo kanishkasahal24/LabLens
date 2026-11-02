@@ -430,9 +430,14 @@ const ReportDetailPage = () => {
 
       {/* Section 4: Rule-Based Clinical Advisory */}
       <div className="card" style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', color: 'var(--primary-teal)' }}>
-          <Sparkles size={20} />
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Personalised Health Advisory</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary-teal)' }}>
+            <Sparkles size={20} />
+            <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>Personalised Health Advisory</h2>
+          </div>
+          <Link to="/advisory" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--primary-teal)', textDecoration: 'none' }}>
+            Open Dedicated Advisory Page & Plan →
+          </Link>
         </div>
 
         {/* BMI Summary */}

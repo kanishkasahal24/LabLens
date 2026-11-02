@@ -34,7 +34,7 @@ function generateSamplePDF(filePath, data) {
     doc.moveDown(1.5);
 
     // Table Header
-    doc.fillColor('#0F6E6E').fontSize(14).font('Helvetica-Bold').text('Comprehensive Diagnostic Report', 40, doc.y);
+    doc.fillColor('#0F6E6E').fontSize(13).font('Helvetica-Bold').text(data.panelTitle || 'Comprehensive Diagnostic Report', 40, doc.y);
     doc.moveDown(0.5);
 
     const tableTop = doc.y;
@@ -70,13 +70,13 @@ function generateSamplePDF(filePath, data) {
       currentY += 20;
     });
 
-    doc.y = currentY + 20;
+    doc.y = currentY + 15;
 
     // Notes
     doc.strokeColor('#E2E8F0').lineWidth(1).moveTo(40, doc.y).lineTo(555, doc.y).stroke();
     doc.moveDown(1);
     doc.fillColor('#64748B').fontSize(8).font('Helvetica');
-    doc.text('Clinical Notes: 12-hour overnight fasting confirmed prior to blood draw.', 40, doc.y);
+    doc.text(data.clinicalNotes || 'Clinical Notes: Fasting confirmed prior to blood draw.', 40, doc.y);
     doc.moveDown(0.5);
     doc.text('*** End of Laboratory Report ***', { align: 'center' });
 
@@ -87,7 +87,8 @@ function generateSamplePDF(filePath, data) {
   });
 }
 
-const sampleReportData = {
+// 1. Comprehensive Health Checkup Report (Routine Profile)
+const sample1Data = {
   labName: 'Quest Diagnostics Labs',
   patientName: 'John Doe',
   patientAge: '40',
@@ -95,6 +96,8 @@ const sampleReportData = {
   collectionDate: '15-Oct-2026',
   testDate: '15-Oct-2026',
   sampleType: 'Venous Blood',
+  panelTitle: 'Comprehensive Routine Health Checkup',
+  clinicalNotes: 'Clinical Notes: 12-hour overnight fasting confirmed prior to blood draw.',
   parameters: [
     { name: 'Hemoglobin', value: 14.5, unit: 'g/dL', range: '13.5 - 17.5' },
     { name: 'Fasting Blood Sugar', value: 104, unit: 'mg/dL', range: '70 - 99' },
@@ -110,20 +113,87 @@ const sampleReportData = {
   ]
 };
 
-// Generate sample report in client/public and root
+// 2. Diabetic & Metabolic Health Panel (High Sugar, HbA1c, Elevated Lipids)
+const sample2Data = {
+  labName: 'Metropolis Healthcare Pathology',
+  patientName: 'Jane Smith',
+  patientAge: '45',
+  patientSex: 'Female',
+  collectionDate: '24-Oct-2026',
+  testDate: '24-Oct-2026',
+  sampleType: 'Venous Blood',
+  panelTitle: 'Diabetic & Metabolic Risk Profile',
+  clinicalNotes: 'Clinical Notes: Patient evaluated for glucose management and metabolic monitoring.',
+  parameters: [
+    { name: 'Fasting Blood Sugar', value: 142, unit: 'mg/dL', range: '70 - 99' },
+    { name: 'HbA1c', value: 7.2, unit: '%', range: '4.0 - 5.6' },
+    { name: 'Total Cholesterol', value: 235, unit: 'mg/dL', range: '125 - 200' },
+    { name: 'Triglycerides', value: 210, unit: 'mg/dL', range: '40 - 150' },
+    { name: 'HDL Cholesterol', value: 38, unit: 'mg/dL', range: '40 - 60' },
+    { name: 'LDL Cholesterol', value: 155, unit: 'mg/dL', range: '50 - 100' },
+    { name: 'Serum Creatinine', value: 1.1, unit: 'mg/dL', range: '0.6 - 1.1' },
+    { name: 'Blood Urea Nitrogen', value: 18, unit: 'mg/dL', range: '7 - 20' },
+    { name: 'Serum Uric Acid', value: 6.8, unit: 'mg/dL', range: '2.5 - 6.0' }
+  ]
+};
+
+// 3. Complete Blood Count & Thyroid Anemia Profile
+const sample3Data = {
+  labName: 'Dr. Lal PathLabs Clinical Center',
+  patientName: 'Purva Sharma',
+  patientAge: '28',
+  patientSex: 'Female',
+  collectionDate: '28-Oct-2026',
+  testDate: '28-Oct-2026',
+  sampleType: 'Venous Blood',
+  panelTitle: 'Complete Hematology & Thyroid Panel',
+  clinicalNotes: 'Clinical Notes: Follow-up evaluation for mild fatigue and thyroid status.',
+  parameters: [
+    { name: 'Hemoglobin', value: 11.2, unit: 'g/dL', range: '12.0 - 15.5' },
+    { name: 'RBC Count', value: 3.9, unit: 'x10^6/uL', range: '4.0 - 5.2' },
+    { name: 'WBC Count', value: 5.5, unit: 'x10^3/uL', range: '4.5 - 11.0' },
+    { name: 'Platelet Count', value: 190, unit: 'x10^3/uL', range: '150 - 450' },
+    { name: 'Thyroid Stimulating Hormone (TSH)', value: 5.8, unit: 'uIU/mL', range: '0.4 - 4.0' },
+    { name: 'Serum Ferritin', value: 18, unit: 'ng/mL', range: '15 - 150' },
+    { name: 'Serum Iron', value: 52, unit: 'ug/dL', range: '60 - 170' },
+    { name: 'Total Iron Binding Capacity', value: 380, unit: 'ug/dL', range: '240 - 450' },
+    { name: 'Serum Calcium', value: 9.1, unit: 'mg/dL', range: '8.5 - 10.2' }
+  ]
+};
+
+// Generate reports in client/public and root
 const clientPublicDir = path.join(__dirname, '..', 'client', 'public');
 if (!fs.existsSync(clientPublicDir)) {
   fs.mkdirSync(clientPublicDir, { recursive: true });
 }
 
-const samplePdfPath = path.join(clientPublicDir, 'sample_blood_report.pdf');
-const desktopSamplePdfPath = path.join(__dirname, '..', 'sample_blood_report.pdf');
+const reportsToGenerate = [
+  {
+    fileName: 'sample_blood_report.pdf',
+    data: sample1Data,
+    label: 'Sample 1: Comprehensive Routine Checkup'
+  },
+  {
+    fileName: 'sample_metabolic_diabetes_report.pdf',
+    data: sample2Data,
+    label: 'Sample 2: Diabetic & Metabolic Panel'
+  },
+  {
+    fileName: 'sample_cbc_thyroid_report.pdf',
+    data: sample3Data,
+    label: 'Sample 3: CBC, Anemia & Thyroid Panel'
+  }
+];
 
-Promise.all([
-  generateSamplePDF(samplePdfPath, sampleReportData),
-  generateSamplePDF(desktopSamplePdfPath, sampleReportData)
-]).then(() => {
-  console.log('Sample reports successfully generated:');
-  console.log('1. Client Public:', samplePdfPath);
-  console.log('2. Project Root:', desktopSamplePdfPath);
-}).catch(console.error);
+async function run() {
+  for (const item of reportsToGenerate) {
+    const publicPath = path.join(clientPublicDir, item.fileName);
+    const rootPath = path.join(__dirname, '..', item.fileName);
+    await generateSamplePDF(publicPath, item.data);
+    await generateSamplePDF(rootPath, item.data);
+    console.log(`✓ Generated ${item.label} -> ${item.fileName}`);
+  }
+  console.log('All sample reports created successfully!');
+}
+
+run().catch(console.error);
