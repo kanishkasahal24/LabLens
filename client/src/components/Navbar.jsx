@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Activity, LayoutDashboard, PlusCircle, TrendingUp, User, LogOut, Users, UserCheck, Sparkles, LogIn, UserPlus } from 'lucide-react';
+import { Activity, LayoutDashboard, PlusCircle, TrendingUp, GitCompare, User, LogOut, Users, UserCheck, Sparkles, LogIn, UserPlus } from 'lucide-react';
 import useAuth from '../hooks/useAuth';
 
 const Navbar = () => {
@@ -77,6 +77,11 @@ const Navbar = () => {
               <NavLink to="/trends" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                 <TrendingUp size={18} />
                 <span>Trends</span>
+              </NavLink>
+
+              <NavLink to="/compare" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                <GitCompare size={18} />
+                <span>Compare</span>
               </NavLink>
 
               <NavLink to="/advisory" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>

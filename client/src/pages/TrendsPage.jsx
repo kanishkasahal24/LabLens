@@ -13,6 +13,7 @@ import {
 import { TrendingUp, Activity, Filter, Info, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import api from '../api/axios';
 import StatusBadge from '../components/StatusBadge';
+import AnalyticsSubNav from '../components/AnalyticsSubNav';
 
 const TrendsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -115,6 +116,8 @@ const TrendsPage = () => {
           <p className="page-subtitle">Track historical biomarker progression over time</p>
         </div>
       </div>
+
+      <AnalyticsSubNav />
 
       {error && (
         <div className="error-banner">

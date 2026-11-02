@@ -12,6 +12,7 @@ import DashboardPage from './pages/DashboardPage';
 import AddReportPage from './pages/AddReportPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import TrendsPage from './pages/TrendsPage';
+import ComparePage from './pages/ComparePage';
 import ProfilePage from './pages/ProfilePage';
 import HealthAdvisoryPage from './pages/HealthAdvisoryPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -76,6 +77,14 @@ function App() {
                 element={
                   <ProtectedRoute roles={['patient']}>
                     <TrendsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/compare"
+                element={
+                  <ProtectedRoute roles={['patient']}>
+                    <ComparePage />
                   </ProtectedRoute>
                 }
               />
