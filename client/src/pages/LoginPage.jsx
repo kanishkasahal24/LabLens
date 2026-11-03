@@ -37,12 +37,9 @@ const LoginPage = () => {
 
     try {
       setIsSubmitting(true);
-      const user = await login(email, password);
-      if (user.role === 'doctor') {
-        navigate('/doctor');
-      } else {
-        navigate('/dashboard');
-      }
+      await login(email, password);
+      navigate('/');
+     
     } catch (err) {
       setServerError(err.message);
     } finally {
@@ -59,7 +56,7 @@ const LoginPage = () => {
     try {
       setIsSubmitting(true);
       await login('john@example.com', 'Password123!');
-      navigate('/dashboard');
+      navigate('/');
     } catch (err) {
       setServerError(err.message || 'Patient demo login failed.');
     } finally {
@@ -76,7 +73,7 @@ const LoginPage = () => {
     try {
       setIsSubmitting(true);
       await login('dr.jenkins@lablens.com', 'Password123!');
-      navigate('/doctor');
+      navigate('/');
     } catch (err) {
       setServerError(err.message || 'Doctor demo login failed.');
     } finally {

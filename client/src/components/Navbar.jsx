@@ -76,12 +76,13 @@ const Navbar = () => {
         .toUpperCase()
         .substring(0, 2)
     : 'U';
+    const firstName = user?.name?.split(' ')[0] || 'there';
 
   return (
     <header className="navbar" ref={navRef}>
       <div className="navbar-inner">
         <Link
-          to={!isAuthenticated ? '/' : isDoctor ? '/doctor' : '/dashboard'}
+          to="/"
           className="brand"
           aria-label="LabLens Home"
           onClick={() => setMobileMenuOpen(false)}
@@ -180,7 +181,7 @@ const Navbar = () => {
                 {initials}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.2 }}>{user?.name}</span>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.2 }}>Hello, {firstName}</span>
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
                   {isDoctor ? `Doctor (${user.doctorCode || 'MD'})` : 'Patient'}
                 </span>
@@ -235,7 +236,7 @@ const Navbar = () => {
                     {initials}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>{user?.name}</span>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>Hello, {firstName}</span>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
                       {isDoctor ? `Doctor (${user.doctorCode || 'MD'})` : 'Patient Account'}
                     </span>

@@ -88,9 +88,9 @@ a:hover {
 }
 
 .navbar-inner {
-  max-width: 1200px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 32px;
   height: 68px;
   display: flex;
   align-items: center;
@@ -114,6 +114,7 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .nav-links {
@@ -145,7 +146,40 @@ a:hover {
   background-color: var(--primary-teal-light);
   font-weight: 600;
 }
+/* Navbar icon sizing (overrides the lucide size prop) */
+.brand-icon svg {
+  width: 26px;
+  height: 26px;
+  max-width: none;
+  flex-shrink: 0;
+}
 
+.nav-link {
+  padding: 8px 12px;
+}
+
+.nav-link svg {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  max-width: none;
+}
+
+.nav-user .btn svg,
+.guest-nav-desktop .btn svg {
+  width: 20px;
+  height: 20px;
+  max-width: none;
+}
+
+.mobile-nav-link svg,
+.mobile-guest-btn svg,
+.mobile-logout-btn svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  max-width: none;
+}
 .nav-user {
   display: flex;
   align-items: center;
